@@ -1,0 +1,32 @@
+{
+  "name": "event-broker",
+  "version": "1.0.0",
+  "description": "A broker for all the events that Rewaa will ever produce or consume",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rewaa-Team/event-broker.git"
+  },
+  "keywords": [
+    "event-broker"
+  ],
+  "author": "M. Ghayas Baig",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Rewaa-Team/event-broker/issues"
+  },
+  "homepage": "https://github.com/Rewaa-Team/event-broker#readme",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.245.0",
+    "@types/node": "^18.11.18",
+    "sqs-consumer": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "typescript": "^4.9.4"
+  }
+}
