@@ -70,6 +70,7 @@ export interface IEmitterOptions {
   localEmitter: EventEmitter;
   eventOnFailure?: string;
   region?: string;
+  maxRetries?: number;
 }
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;

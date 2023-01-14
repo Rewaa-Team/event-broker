@@ -3,6 +3,7 @@ import { Consumer } from "sqs-consumer";
 import {
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
+  DEFAULT_MAX_RETRIES,
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_RETRY_COUNT,
@@ -29,7 +30,6 @@ export class SqsEmitter implements IEmitter {
   private localEmitter!: EventEmitter;
   private options!: IEmitterOptions;
   private topicListeners: Map<string, EventListener<any>[]> = new Map();
-  private maxRetries = 0;
   private queueMap: IEventTopicMap = {};
   private queues: Map<string, Queue | undefined> = new Map();
 
@@ -251,7 +251,7 @@ export class SqsEmitter implements IEmitter {
         await listener(message.data);
       }
     } catch (error) {
-      if (message.retryCount < this.maxRetries) {
+      if (message.retryCount < (this.options.maxRetries || DEFAULT_MAX_RETRIES)) {
         message.retryCount++;
         try {
           await this.producer.send(
