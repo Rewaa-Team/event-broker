@@ -1,0 +1,5 @@
+export const DEFAULT_MESSAGE_DELAY = 0;
+export const DEFAULT_RETRY_COUNT = 0;
+export const DEFAULT_MAX_PROCESSING_TIME = 60000;
+export const DEFAULT_BATCH_SIZE = 10;
+export const DEFAULT_VISIBILITY_TIMEOUT = 360;

@@ -8,8 +8,19 @@ export interface ISQSMessage {
   messageGroupId?: string;
 }
 
+export interface ISQSConsumerMessage {
+  Body: string;
+}
+
+export interface ISQSMessageOptions {
+  delay: number;
+}
+
 export interface IEmitOptions {
-  partitionKey: string;
+  partitionKey?: string;
+  delay?: number;
+  retryCount?: number;
+  useLocalEmitter?: boolean;
 }
 
 export interface IFailedEventMessage {
@@ -49,7 +60,7 @@ export interface IEmitterOptions {
   eventTopicMap: IEventTopicMap;
   useExternalBroker?: boolean;
   emitterType: EmitterType;
-  maxProcessingTime: number;
+  maxProcessingTime?: number;
   environment: string;
   localEmitter: EventEmitter;
   eventOnFailure?: string;
@@ -61,7 +72,7 @@ export interface IEmitter {
   initialize(options: IEmitterOptions): Promise<void>;
   emit(
     eventName: string,
-    options: IEmitOptions,
+    options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean>;
   on(eventName: string, listener: EventListener, useLocal?: boolean): void;

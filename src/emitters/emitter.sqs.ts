@@ -1,11 +1,13 @@
-import {
-  CreateQueueRequest,
-  SendMessageCommandOutput,
-  SendMessageRequest,
-  SQS,
-} from "@aws-sdk/client-sqs";
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
+import {
+  DEFAULT_BATCH_SIZE,
+  DEFAULT_MAX_PROCESSING_TIME,
+  DEFAULT_MESSAGE_DELAY,
+  DEFAULT_RETRY_COUNT,
+  DEFAULT_VISIBILITY_TIMEOUT,
+} from "src/constants";
+import { SQSProducer } from "src/producers/producer.sqs";
 import { v4 } from "uuid";
 import {
   IEmitterOptions,
@@ -16,65 +18,10 @@ import {
   Topic,
   IFailedEventMessage,
   IEmitOptions,
-} from "./types";
-import { logger } from "./utils";
-
-class SQSProducer {
-  private sqs: SQS;
-  constructor() {
-    this.sqs = new SQS({});
-  }
-
-  send = async (
-    queueUrl: string,
-    message: ISQSMessage
-  ): Promise<SendMessageCommandOutput> => {
-    const params: SendMessageRequest = {
-      MessageBody: JSON.stringify(message),
-      QueueUrl: queueUrl,
-      DelaySeconds: 0,
-      MessageAttributes: {
-        ContentType: {
-          DataType: "String",
-          StringValue: "JSON",
-        },
-      },
-    };
-
-    if (this.isFifoQueue(queueUrl)) {
-      params.MessageDeduplicationId = v4();
-      params.MessageGroupId = message.messageGroupId;
-    }
-
-    return await this.sqs.sendMessage(params);
-  };
-
-  createQueue = async (queueName: string): Promise<string | undefined> => {
-    const params: CreateQueueRequest = {
-      QueueName: queueName,
-      Attributes: {
-        DelaySeconds: "0",
-        MessageRetentionPeriod: "86400",
-      },
-    };
-
-    if (this.isFifoQueue(queueName)) {
-      params.Attributes = {
-        FifoQueue: "true",
-      };
-    }
-
-    try {
-      const { QueueUrl } = await this.sqs.createQueue(params);
-      return QueueUrl;
-    } catch (error) {
-      logger(`Queue creation failed: ${queueName}`);
-      throw error;
-    }
-  };
-
-  isFifoQueue = (queueUrl: string) => queueUrl.includes(".fifo");
-}
+  EventListener,
+  ISQSConsumerMessage,
+} from "../types";
+import { logger } from "../utils";
 
 export class SqsEmitter implements IEmitter {
   private producer!: SQSProducer;
@@ -146,17 +93,21 @@ export class SqsEmitter implements IEmitter {
       if (!queueUrl) {
         throw new Error(`Queue URL not found: ${eventName}`);
       }
-      await this.producer.send(queueUrl, {
-        messageGroupId: options?.partitionKey || eventName,
-        eventName,
-        data: args,
-        retryCount: 0,
-      });
+      await this.producer.send(
+        queueUrl,
+        {
+          messageGroupId: options?.partitionKey || eventName,
+          eventName,
+          data: args,
+          retryCount: options?.retryCount || DEFAULT_RETRY_COUNT,
+        },
+        {
+          delay: options?.delay || DEFAULT_MESSAGE_DELAY,
+        }
+      );
       return true;
     } catch (error) {
-      console.error(
-        `Message producing failed: ${eventName} ${JSON.stringify(error)}`
-      );
+      logger(`Message producing failed: ${eventName} ${JSON.stringify(error)}`);
       this.logFailedEvent({
         topic: eventName,
         event: args,
@@ -184,26 +135,14 @@ export class SqsEmitter implements IEmitter {
     }
     queue.consumer = Consumer.create({
       queueUrl: queue.url,
-      handleMessage: async (message: any) => {
-        const key = v4();
-        logger(
-          `Message started ${
-            queue.url
-          }_${key}_${new Date()}_${message.Body.toString()}`
+      handleMessage: async (message) => {
+        await this.handleMessageReceipt(
+          message as ISQSConsumerMessage,
+          queue.url!
         );
-        const messageConsumptionStartTime = new Date();
-        await this.onMessageReceived(message);
-        const messageConsumptionEndTime = new Date();
-        const difference =
-          messageConsumptionEndTime.getTime() -
-          messageConsumptionStartTime.getTime();
-        if (difference > this.options.maxProcessingTime) {
-          logger(`Slow message ${queue.url}_${key}_${new Date()}`);
-        }
-        logger(`Message ended ${queue.url}_${key}_${new Date()}`);
       },
-      batchSize: queue.batchSize ?? 10,
-      visibilityTimeout: queue.visibilityTimeout || 360,
+      batchSize: queue.batchSize || DEFAULT_BATCH_SIZE,
+      visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
     });
 
     queue.consumer.on("error", (error, message) => {
@@ -249,6 +188,29 @@ export class SqsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
+  handleMessageReceipt = async (
+    message: ISQSConsumerMessage,
+    queueUrl: string
+  ) => {
+    const key = v4();
+    logger(
+      `Message started ${queueUrl}_${key}_${new Date()}_${message.Body.toString()}`
+    );
+    const messageConsumptionStartTime = new Date();
+    await this.onMessageReceived(message);
+    const messageConsumptionEndTime = new Date();
+    const difference =
+      messageConsumptionEndTime.getTime() -
+      messageConsumptionStartTime.getTime();
+    if (
+      difference >
+      (this.options.maxProcessingTime || DEFAULT_MAX_PROCESSING_TIME)
+    ) {
+      logger(`Slow message ${queueUrl}_${key}_${new Date()}`);
+    }
+    logger(`Message ended ${queueUrl}_${key}_${new Date()}`);
+  };
+
   removeListener(eventName: string, listener: EventListener) {
     this.topicListeners.delete(eventName);
   }
@@ -257,7 +219,7 @@ export class SqsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  async on(eventName: string, listener: EventListener) {
+  on(eventName: string, listener: EventListener) {
     let listeners = this.topicListeners.get(eventName);
     if (!listeners) listeners = [];
     listeners.push(listener);
@@ -288,7 +250,10 @@ export class SqsEmitter implements IEmitter {
         try {
           await this.producer.send(
             this.getQueueUrlForEvent(message.eventName)!,
-            message
+            message,
+            {
+              delay: DEFAULT_MESSAGE_DELAY,
+            }
           );
         } catch (error) {
           this.logFailedEvent({

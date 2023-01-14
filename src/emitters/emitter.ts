@@ -6,7 +6,7 @@ import {
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
-} from "./types";
+} from "../types";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
@@ -29,10 +29,10 @@ export class Emitter implements IEmitter {
   }
   async emit(
     eventName: string,
-    options: IEmitOptions,
+    options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean> {
-    if (this.options.useExternalBroker) {
+    if (this.options.useExternalBroker && !options?.useLocalEmitter) {
       return !!(await this.emitter?.emit(eventName, options, ...args));
     }
     return this.localEmitter.emit(eventName, ...args);
