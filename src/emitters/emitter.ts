@@ -27,6 +27,14 @@ export class Emitter implements IEmitter {
       await this.emitter.initialize(this.options);
     }
   }
+  async initializeConsumer(): Promise<void> {
+    if (
+      this.options.isConsumer &&
+      this.options.emitterType === EmitterType.SQS
+    ) {
+      await this.emitter?.initializeConsumer();
+    }
+  }
   async emit(
     eventName: string,
     options?: IEmitOptions,

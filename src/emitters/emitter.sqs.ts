@@ -117,7 +117,7 @@ export class SqsEmitter implements IEmitter {
     }
   }
 
-  initializeConsumer() {
+  async initializeConsumer() {
     for (const queue in this.queues) {
       const q = this.queues.get(queue);
       if (!q) {
