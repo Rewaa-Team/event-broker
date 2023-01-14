@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-sqs";
 import { ISQSMessage, ISQSMessageOptions } from "../types";
 import { logger } from "../utils";
+import { v4 } from "uuid";
 
 export class SQSProducer {
   private sqs: SQS;
@@ -80,8 +81,4 @@ export class SQSProducer {
   };
 
   isFifoQueue = (queueUrl: string) => queueUrl.includes(".fifo");
-}
-
-function v4(): string | undefined {
-  throw new Error("Function not implemented.");
 }
