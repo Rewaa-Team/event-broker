@@ -6,7 +6,7 @@ import {
   DeleteQueueCommandInput,
   SQSClientConfig,
 } from "@aws-sdk/client-sqs";
-import { ISQSMessage, ISQSMessageOptions } from "../types";
+import { ISQSMessage, ISQSMessageOptions, ISQSQueueCreateOptions } from "../types";
 import { logger } from "../utils";
 import { v4 } from "uuid";
 
@@ -43,12 +43,12 @@ export class SQSProducer {
     return await this.sqs.sendMessage(params);
   };
 
-  createQueue = async (queueName: string): Promise<string | undefined> => {
+  createQueue = async (queueName: string, options: ISQSQueueCreateOptions): Promise<string | undefined> => {
     const params: CreateQueueRequest = {
       QueueName: queueName,
       Attributes: {
-        DelaySeconds: "0",
-        MessageRetentionPeriod: "86400",
+        DelaySeconds: options.delay,
+        MessageRetentionPeriod: options.messageRetentionPeriod,
       },
     };
 

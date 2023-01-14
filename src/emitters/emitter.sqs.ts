@@ -4,6 +4,7 @@ import {
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
   DEFAULT_MESSAGE_DELAY,
+  DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_RETRY_COUNT,
   DEFAULT_VISIBILITY_TIMEOUT,
 } from "../constants";
@@ -43,7 +44,10 @@ export class SqsEmitter implements IEmitter {
   }
 
   async createQueue(queueName: string, topic: Topic) {
-    const queueUrl = await this.producer.createQueue(queueName);
+    const queueUrl = await this.producer.createQueue(queueName, {
+      delay: `${DEFAULT_MESSAGE_DELAY}`,
+      messageRetentionPeriod: `${DEFAULT_MESSAGE_RETENTION_PERIOD}`,
+    });
     this.queues.set(queueName, {
       isFifo: topic.isFifo,
       isConsuming: topic.isConsuming,

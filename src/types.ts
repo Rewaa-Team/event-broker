@@ -16,6 +16,11 @@ export interface ISQSMessageOptions {
   delay: number;
 }
 
+export interface ISQSQueueCreateOptions {
+  delay: string;
+  messageRetentionPeriod: string;
+}
+
 export interface IEmitOptions {
   partitionKey?: string;
   delay?: number;
