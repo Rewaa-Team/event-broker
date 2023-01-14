@@ -6,8 +6,8 @@ import {
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_RETRY_COUNT,
   DEFAULT_VISIBILITY_TIMEOUT,
-} from "src/constants";
-import { SQSProducer } from "src/producers/producer.sqs";
+} from "../constants";
+import { SQSProducer } from "../producers/producer.sqs";
 import { v4 } from "uuid";
 import {
   IEmitterOptions,
@@ -27,7 +27,7 @@ export class SqsEmitter implements IEmitter {
   private producer!: SQSProducer;
   private localEmitter!: EventEmitter;
   private options!: IEmitterOptions;
-  private topicListeners: Map<string, EventListener[]> = new Map();
+  private topicListeners: Map<string, EventListener<any>[]> = new Map();
   private maxRetries = 0;
   private queueMap: IEventTopicMap = {};
   private queues: Map<string, Queue | undefined> = new Map();
@@ -35,7 +35,10 @@ export class SqsEmitter implements IEmitter {
   async initialize(options: IEmitterOptions): Promise<void> {
     this.options = options;
     this.localEmitter = options.localEmitter;
-    this.producer = new SQSProducer();
+    this.queueMap = this.options.eventTopicMap;
+    this.producer = new SQSProducer({
+      region: this.options.region,
+    });
     await this.createQueues();
   }
 
@@ -67,7 +70,7 @@ export class SqsEmitter implements IEmitter {
 
   getQueueName = (topic: Topic): string => {
     const qName = topic.name.replace(".fifo", "");
-    return `${this.options.environment}_${topic.servicePrefix || ":"}_${qName}${
+    return `${this.options.environment}_${topic.servicePrefix || "-"}_${qName}${
       topic.isFifo ? ".fifo" : ""
     }`;
   };
@@ -118,15 +121,14 @@ export class SqsEmitter implements IEmitter {
   }
 
   async initializeConsumer() {
-    for (const queue in this.queues) {
-      const q = this.queues.get(queue);
-      if (!q) {
-        continue;
+    this.queues.forEach((queue) => {
+      if (!queue) {
+        return;
       }
-      if (q.isConsuming) {
-        this.attachConsumer(q);
+      if (queue.isConsuming) {
+        this.attachConsumer(queue);
       }
-    }
+    });
   }
 
   private attachConsumer(queue: Queue) {
@@ -134,6 +136,7 @@ export class SqsEmitter implements IEmitter {
       return;
     }
     queue.consumer = Consumer.create({
+      region: this.options.region,
       queueUrl: queue.url,
       handleMessage: async (message) => {
         await this.handleMessageReceipt(
@@ -211,7 +214,7 @@ export class SqsEmitter implements IEmitter {
     logger(`Message ended ${queueUrl}_${key}_${new Date()}`);
   };
 
-  removeListener(eventName: string, listener: EventListener) {
+  removeListener(eventName: string, listener: EventListener<any>) {
     this.topicListeners.delete(eventName);
   }
 
@@ -219,9 +222,8 @@ export class SqsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  on(eventName: string, listener: EventListener) {
-    let listeners = this.topicListeners.get(eventName);
-    if (!listeners) listeners = [];
+  on(eventName: string, listener: EventListener<any>) {
+    let listeners = this.topicListeners.get(eventName) || [];
     listeners.push(listener);
     this.topicListeners.set(eventName, listeners);
   }

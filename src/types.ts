@@ -64,9 +64,10 @@ export interface IEmitterOptions {
   environment: string;
   localEmitter: EventEmitter;
   eventOnFailure?: string;
+  region?: string;
 }
 
-export type EventListener = (...args: any[]) => Promise<void>;
+export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
   initialize(options: IEmitterOptions): Promise<void>;
@@ -76,7 +77,7 @@ export interface IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean>;
-  on(eventName: string, listener: EventListener, useLocal?: boolean): void;
+  on<T>(eventName: string, listener: EventListener<T>, useLocal?: boolean): void;
   removeAllListener(): void;
-  removeListener(eventName: string, listener: EventListener): void;
+  removeListener(eventName: string, listener: EventListener<any>): void;
 }

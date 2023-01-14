@@ -45,7 +45,7 @@ export class Emitter implements IEmitter {
     }
     return this.localEmitter.emit(eventName, ...args);
   }
-  on(eventName: string, listener: EventListener, useLocal?: boolean) {
+  on(eventName: string, listener: EventListener<any>, useLocal?: boolean) {
     if (
       this.options.useExternalBroker &&
       this.options.isConsumer &&
@@ -56,7 +56,7 @@ export class Emitter implements IEmitter {
     }
     this.localEmitter.on(eventName, listener);
   }
-  removeListener(eventName: string, listener: EventListener) {
+  removeListener(eventName: string, listener: EventListener<any>) {
     if (this.options.useExternalBroker) {
       this.emitter?.removeListener(eventName, listener);
       return;

@@ -4,14 +4,17 @@ import {
   SendMessageRequest,
   SQS,
   DeleteQueueCommandInput,
+  SQSClientConfig,
 } from "@aws-sdk/client-sqs";
-import { ISQSMessage, ISQSMessageOptions } from "src/types";
-import { logger } from "src/utils";
+import { ISQSMessage, ISQSMessageOptions } from "../types";
+import { logger } from "../utils";
 
 export class SQSProducer {
   private sqs: SQS;
-  constructor() {
-    this.sqs = new SQS({});
+  constructor(config: SQSClientConfig) {
+    this.sqs = new SQS({
+      region: config.region,
+    });
   }
 
   send = async (
