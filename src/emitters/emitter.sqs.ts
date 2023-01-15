@@ -140,7 +140,7 @@ export class SqsEmitter implements IEmitter {
       return;
     }
     queue.consumer = Consumer.create({
-      region: this.options.region,
+      sqs: this.producer.client,
       queueUrl: queue.url,
       handleMessage: async (message) => {
         await this.handleMessageReceipt(

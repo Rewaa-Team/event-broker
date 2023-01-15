@@ -13,9 +13,11 @@ import { v4 } from "uuid";
 export class SQSProducer {
   private sqs: SQS;
   constructor(config: SQSClientConfig) {
-    this.sqs = new SQS({
-      region: config.region,
-    });
+    this.sqs = new SQS(config);
+  }
+
+  get client():SQS {
+    return this.sqs;
   }
 
   send = async (
