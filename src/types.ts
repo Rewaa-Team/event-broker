@@ -1,10 +1,10 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
+import { SQSClientConfig } from "@aws-sdk/client-sqs";
 
 export interface ISQSMessage {
   data: any;
   eventName: string;
-  retryCount: number;
   messageGroupId?: string;
 }
 
@@ -29,7 +29,8 @@ export interface IEmitOptions {
 }
 
 export interface IFailedEventMessage {
-  topic: string;
+  topic?: string;
+  queueUrl?: string;
   event: any;
   error?: any;
 }
@@ -39,6 +40,8 @@ export interface Queue {
   isConsuming: boolean;
   consumer?: Consumer;
   url?: string;
+  arn?: string;
+  isDLQ?: boolean;
   visibilityTimeout?: number;
   batchSize?: number;
 }
@@ -50,6 +53,7 @@ export interface Topic {
   servicePrefix?: string;
   visibilityTimeout?: number;
   batchSize?: number;
+  maxRetryCount?: number;
 }
 
 export interface IEventTopicMap {
@@ -69,8 +73,9 @@ export interface IEmitterOptions {
   environment: string;
   localEmitter: EventEmitter;
   eventOnFailure?: string;
-  region?: string;
   maxRetries?: number;
+  sqsConfig?: SQSClientConfig
+  deadLetterQueueEnabled?: boolean;
 }
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;

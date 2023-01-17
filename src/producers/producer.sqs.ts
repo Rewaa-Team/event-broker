@@ -5,8 +5,14 @@ import {
   SQS,
   DeleteQueueCommandInput,
   SQSClientConfig,
+  GetQueueAttributesRequest,
+  GetQueueAttributesResult,
 } from "@aws-sdk/client-sqs";
-import { ISQSMessage, ISQSMessageOptions, ISQSQueueCreateOptions } from "../types";
+import {
+  ISQSMessage,
+  ISQSMessageOptions,
+  ISQSQueueCreateOptions,
+} from "../types";
 import { logger } from "../utils";
 import { v4 } from "uuid";
 
@@ -16,7 +22,7 @@ export class SQSProducer {
     this.sqs = new SQS(config);
   }
 
-  get client():SQS {
+  get client(): SQS {
     return this.sqs;
   }
 
@@ -45,19 +51,17 @@ export class SQSProducer {
     return await this.sqs.sendMessage(params);
   };
 
-  createQueue = async (queueName: string, options: ISQSQueueCreateOptions): Promise<string | undefined> => {
+  createQueue = async (
+    queueName: string,
+    attributes: Record<string, string>
+  ): Promise<string | undefined> => {
     const params: CreateQueueRequest = {
       QueueName: queueName,
-      Attributes: {
-        DelaySeconds: options.delay,
-        MessageRetentionPeriod: options.messageRetentionPeriod,
-      },
+      Attributes: attributes,
     };
 
-    if (this.isFifoQueue(queueName)) {
-      params.Attributes = {
-        FifoQueue: "true",
-      };
+    if (this.isFifoQueue(queueName) && params.Attributes) {
+      params.Attributes.FifoQueue = "true";
     }
 
     try {
@@ -65,6 +69,23 @@ export class SQSProducer {
       return QueueUrl;
     } catch (error) {
       logger(`Queue creation failed: ${queueName}`);
+      throw error;
+    }
+  };
+
+  getQueueAttributes = async (
+    queueUrl: string,
+    attributes: string[]
+  ): Promise<Record<string, string> | undefined> => {
+    const params: GetQueueAttributesRequest = {
+      QueueUrl: queueUrl,
+      AttributeNames: attributes,
+    };
+    try {
+      const { Attributes } = await this.sqs.getQueueAttributes(params);
+      return Attributes;
+    } catch (error) {
+      logger(`Failed to fetch queue attributes: ${queueUrl}`);
       throw error;
     }
   };
