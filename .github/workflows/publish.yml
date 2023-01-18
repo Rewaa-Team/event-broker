@@ -14,6 +14,6 @@ jobs:
           node-version: '14.x'
           registry-url: 'https://npm.pkg.github.com'
       - name: Install Dependencies, Build and Publish package on NPM 📦
-        run: npm ci && npm run build && npm publish
+        run: npm ci && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
