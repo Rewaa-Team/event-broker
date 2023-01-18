@@ -82,7 +82,6 @@ export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
   initialize(options: IEmitterOptions): Promise<void>;
-  initializeConsumer(): Promise<void>;
   emit(
     eventName: string,
     options?: IEmitOptions,

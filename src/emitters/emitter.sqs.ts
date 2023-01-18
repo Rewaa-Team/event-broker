@@ -48,6 +48,7 @@ export class SqsEmitter implements IEmitter {
     }
     await this.createQueues();
     logger(`Source queues created`);
+    await this.initializeConsumer();
   }
 
   async createQueue(queueName: string, topic: Topic, isDLQ: boolean = false) {
@@ -123,7 +124,7 @@ export class SqsEmitter implements IEmitter {
   };
 
   getQueueUrlForEvent = (eventName: string): string | undefined => {
-    return this.queues.get(this.queueMap[eventName].name)?.url;
+    return this.queues.get(this.getQueueName(this.queueMap[eventName]))?.url;
   };
 
   logFailedEvent = (data: IFailedEventMessage) => {
@@ -166,8 +167,8 @@ export class SqsEmitter implements IEmitter {
     }
   }
 
-  async initializeConsumer() {
-    if(this.consumersStarted) {
+  private async initializeConsumer() {
+    if(this.consumersStarted || !this.options.isConsumer) {
       return;
     }
     this.queues.forEach((queue) => {
@@ -179,6 +180,7 @@ export class SqsEmitter implements IEmitter {
       }
     });
     this.consumersStarted = true;
+    logger(`Consumers started`);
   }
 
   private attachConsumer(queue: Queue) {
@@ -304,7 +306,7 @@ export class SqsEmitter implements IEmitter {
 
     try {
       for (const listener of listeners) {
-        await listener(message.data);
+        await listener(...message.data);
       }
     } catch (error) {
       this.logFailedEvent({
