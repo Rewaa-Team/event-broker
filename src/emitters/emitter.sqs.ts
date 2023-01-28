@@ -1,6 +1,7 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import {
+  CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
   DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MAX_PROCESSING_TIME,
@@ -23,9 +24,11 @@ import {
   IFailedEventMessage,
   IEmitOptions,
   EventListener,
-  ISQSConsumerMessage,
+  ClientMessage,
+  EmitterType,
 } from "../types";
 import { logger } from "../utils";
+import { Message } from "@aws-sdk/client-sqs";
 
 export class SqsEmitter implements IEmitter {
   private producer!: SQSProducer;
@@ -61,7 +64,11 @@ export class SqsEmitter implements IEmitter {
       }`,
     };
     topic.batchSize;
-    if (!isDLQ && this.options.deadLetterQueueEnabled) {
+    if (
+      !isDLQ &&
+      this.options.deadLetterQueueEnabled &&
+      topic.deadLetterQueueEnabled !== false
+    ) {
       queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${
         this.queues.get(this.getQueueName(topic, true))?.arn
       }\",\"maxReceiveCount\":\"${
@@ -105,11 +112,11 @@ export class SqsEmitter implements IEmitter {
         continue;
       }
       uniqueQueueMap.set(queueName, true);
-      if (dlqs) {
+      if (dlqs && topic.deadLetterQueueEnabled !== false) {
         queueCreationPromises.push(
           this.createQueue(this.getQueueName(topic, true), topic, true)
         );
-      } else {
+      } else if (!dlqs) {
         queueCreationPromises.push(this.createQueue(queueName, topic));
       }
     }
@@ -168,7 +175,7 @@ export class SqsEmitter implements IEmitter {
   }
 
   private async initializeConsumer() {
-    if(this.consumersStarted || !this.options.isConsumer) {
+    if (this.consumersStarted || !this.options.isConsumer) {
       return;
     }
     this.queues.forEach((queue) => {
@@ -191,10 +198,7 @@ export class SqsEmitter implements IEmitter {
       sqs: this.producer.client,
       queueUrl: queue.url,
       handleMessage: async (message) => {
-        await this.handleMessageReceipt(
-          message as ISQSConsumerMessage,
-          queue.url!
-        );
+        await this.handleMessageReceipt(message as Message, queue.url!);
       },
       batchSize: queue.batchSize || DEFAULT_BATCH_SIZE,
       visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -243,13 +247,10 @@ export class SqsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
-  handleMessageReceipt = async (
-    message: ISQSConsumerMessage,
-    queueUrl: string
-  ) => {
+  handleMessageReceipt = async (message: Message, queueUrl: string) => {
     const key = v4();
     logger(
-      `Message started ${queueUrl}_${key}_${new Date()}_${message.Body.toString()}`
+      `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
     );
     const messageConsumptionStartTime = new Date();
     await this.onMessageReceived(message, queueUrl);
@@ -316,5 +317,15 @@ export class SqsEmitter implements IEmitter {
       });
       throw error;
     }
+  }
+
+  async processMessage<T extends EmitterType>(
+    message: ClientMessage[T],
+    topicUrl?: string | undefined
+  ): Promise<void> {
+    return await this.handleMessageReceipt(
+      message as Message,
+      topicUrl || CUSTOM_HANDLER_NAME
+    );
   }
 }

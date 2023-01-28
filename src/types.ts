@@ -1,15 +1,11 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { SQSClientConfig } from "@aws-sdk/client-sqs";
+import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
 
 export interface ISQSMessage {
   data: any;
   eventName: string;
   messageGroupId?: string;
-}
-
-export interface ISQSConsumerMessage {
-  Body: string;
 }
 
 export interface ISQSMessageOptions {
@@ -91,6 +87,12 @@ export interface Topic {
    * Default: 3
    */
   maxRetryCount?: number;
+  
+  /**
+   * Topic level DLQ specification
+   * By default, the value will be whatever is in IEmitterOptions
+   */
+  deadLetterQueueEnabled?: boolean;
 }
 
 export interface IEventTopicMap {
@@ -159,6 +161,10 @@ export interface IEmitterOptions {
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
+export type ClientMessage = {
+  [EmitterType.SQS]: Message
+}
+
 export interface IEmitter {
   initialize(options: IEmitterOptions): Promise<void>;
   emit(
@@ -169,4 +175,12 @@ export interface IEmitter {
   on<T>(eventName: string, listener: EventListener<T>, useLocal?: boolean): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
+  /**
+   * Use this method to when you need to consume messages by yourself
+   * but use the routing logic defined in the broker.
+   * @param message The message received from queue/topic
+   * Can be of type corresponding to ClientMessage
+   * @param topicUrl Optional queue/topic url for logging purposes
+   */
+  processMessage<T extends EmitterType>(message: ClientMessage[T], topicUrl?: string): Promise<void>;
 }
