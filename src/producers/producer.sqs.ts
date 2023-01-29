@@ -6,12 +6,10 @@ import {
   DeleteQueueCommandInput,
   SQSClientConfig,
   GetQueueAttributesRequest,
-  GetQueueAttributesResult,
 } from "@aws-sdk/client-sqs";
 import {
   ISQSMessage,
   ISQSMessageOptions,
-  ISQSQueueCreateOptions,
 } from "../types";
 import { logger } from "../utils";
 import { v4 } from "uuid";

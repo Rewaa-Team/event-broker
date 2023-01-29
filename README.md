@@ -43,3 +43,10 @@ emitter.on<{payload: ISendNotificationPayload}>("SEND_NOTIFICATION", async (...d
 
 await  emitter.initialize(emitterOptions);
 ```
+
+# Consuming topics yourself
+If you are consuming the topics/queues yourself, but want event-broker to handle the routing logic, you can use the processMessage function like so:
+
+```
+await emitter.processMessage<EmitterType.SQS>(message, topicUrl);
+```

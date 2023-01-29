@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { SqsEmitter } from "./emitter.sqs";
 import {
+  ClientMessage,
   EmitterType,
   EventListener,
   IEmitOptions,
@@ -61,5 +62,8 @@ export class Emitter implements IEmitter {
       return;
     }
     this.localEmitter.removeAllListeners();
+  }
+  async processMessage<T extends EmitterType>(message: ClientMessage[T], topicUrl?: string | undefined): Promise<void> {
+      return await this.emitter?.processMessage(message, topicUrl);
   }
 }
