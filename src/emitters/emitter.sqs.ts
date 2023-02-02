@@ -27,8 +27,9 @@ import {
   ClientMessage,
   EmitterType,
 } from "../types";
-import { logger } from "../utils";
+import { logger, mapReplacer, mapReviver } from "../utils";
 import { Message } from "@aws-sdk/client-sqs";
+import { readFileSync, writeFileSync } from "fs";
 
 export class SqsEmitter implements IEmitter {
   private producer!: SQSProducer;
@@ -44,6 +45,27 @@ export class SqsEmitter implements IEmitter {
     this.localEmitter = options.localEmitter;
     this.queueMap = this.options.eventTopicMap;
     this.producer = new SQSProducer(this.options.sqsConfig || {});
+    await this.loadQueues();
+    await this.initializeConsumer();
+  }
+
+  private async loadQueues() {
+    try {
+      let existingQueues: any = readFileSync("queues.json", {
+        encoding: "utf-8",
+      });
+      if (existingQueues && existingQueues.length) {
+        existingQueues = new Map(JSON.parse(existingQueues, (key, value) => mapReviver(key, value)));
+        this.queues = existingQueues;
+        logger(`Queues loaded from saved file`);
+        return;
+      }
+    } catch (error: any) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
     if (this.options.deadLetterQueueEnabled) {
       // Create DLQs first so that the TargetARN can be used in source queue
       await this.createQueues(true);
@@ -51,10 +73,18 @@ export class SqsEmitter implements IEmitter {
     }
     await this.createQueues();
     logger(`Source queues created`);
-    await this.initializeConsumer();
+    this.writeQueuesFile();
   }
 
-  async createQueue(queueName: string, topic: Topic, isDLQ: boolean = false) {
+  private writeQueuesFile() {
+    writeFileSync("queues.json", JSON.stringify(this.queues, (key, value) => mapReplacer(key, value)));
+  }
+
+  private async createQueue(
+    queueName: string,
+    topic: Topic,
+    isDLQ: boolean = false
+  ) {
     let queueAttributes: Record<string, string> = {
       DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
@@ -101,10 +131,7 @@ export class SqsEmitter implements IEmitter {
     this.queues.set(queueName, queue);
   }
 
-  async createQueues(dlqs: boolean = false) {
-    if(this.options.createTopics === false) {
-      return;
-    }
+  private async createQueues(dlqs: boolean = false) {
     const uniqueQueueMap: Map<string, boolean> = new Map();
     const queueCreationPromises: Promise<void>[] = [];
     for (const topicKey in this.queueMap) {
@@ -125,18 +152,18 @@ export class SqsEmitter implements IEmitter {
     await Promise.all(queueCreationPromises);
   }
 
-  getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
+  private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
     const qName = topic.name.replace(".fifo", "");
     return `${this.options.environment}_${topic.servicePrefix || ""}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
 
-  getQueueUrlForEvent = (eventName: string): string | undefined => {
+  private getQueueUrlForEvent = (eventName: string): string | undefined => {
     return this.queues.get(this.getQueueName(this.queueMap[eventName]))?.url;
   };
 
-  logFailedEvent = (data: IFailedEventMessage) => {
+  private logFailedEvent = (data: IFailedEventMessage) => {
     if (!this.options.eventOnFailure) {
       return;
     }
@@ -249,7 +276,7 @@ export class SqsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
-  handleMessageReceipt = async (message: Message, queueUrl: string) => {
+  private handleMessageReceipt = async (message: Message, queueUrl: string) => {
     const key = v4();
     logger(
       `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`

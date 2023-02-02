@@ -157,11 +157,6 @@ export interface IEmitterOptions {
    * will be used when maxRetryCount is exceeded for a topic
    */
   deadLetterQueueEnabled?: boolean;
-  /**
-   * Set to false if you want the broker to not create topics,
-   * Default is true
-   */
-  createTopics?: boolean;
 }
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
