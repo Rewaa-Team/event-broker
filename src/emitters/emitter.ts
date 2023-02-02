@@ -7,6 +7,7 @@ import {
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
+  Topic,
 } from "../types";
 
 export class Emitter implements IEmitter {
@@ -65,5 +66,8 @@ export class Emitter implements IEmitter {
   }
   async processMessage<T extends EmitterType>(message: ClientMessage[T], topicUrl?: string | undefined): Promise<void> {
       return await this.emitter?.processMessage(message, topicUrl);
+  }
+  getTopicReference(topic: Topic): string {
+      return this.emitter?.getTopicReference(topic) || '';
   }
 }

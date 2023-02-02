@@ -30,7 +30,7 @@ export interface IEmitOptions {
    */
   delay?: number;
   /**
-   * Set to true if using local emitter to emit on the 
+   * Set to true if using local emitter to emit on the
    * local node emitter
    */
   useLocalEmitter?: boolean;
@@ -87,7 +87,7 @@ export interface Topic {
    * Default: 3
    */
   maxRetryCount?: number;
-  
+
   /**
    * Topic level DLQ specification
    * By default, the value will be whatever is in IEmitterOptions
@@ -142,7 +142,7 @@ export interface IEmitterOptions {
   eventOnFailure?: string;
   /**
    * Maximum number of times the broker will retry the message
-   * in case of failure in consumption after which it will be 
+   * in case of failure in consumption after which it will be
    * moved to a DLQ if deadLetterQueueEnabled is true
    * Default: 3
    */
@@ -150,20 +150,24 @@ export interface IEmitterOptions {
   /**
    * Optional SQS Client config used by message producer
    */
-  sqsConfig?: SQSClientConfig
+  sqsConfig?: SQSClientConfig;
   /**
    * Set to true if you want to use DLQs
    * Every topic will have a DLQ created against it that
    * will be used when maxRetryCount is exceeded for a topic
    */
   deadLetterQueueEnabled?: boolean;
+  /**
+   * Set to true if you want the broker to create topics
+   */
+  createTopics?: boolean;
 }
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export type ClientMessage = {
-  [EmitterType.SQS]: Message
-}
+  [EmitterType.SQS]: Message;
+};
 
 export interface IEmitter {
   initialize(options: IEmitterOptions): Promise<void>;
@@ -172,7 +176,11 @@ export interface IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean>;
-  on<T>(eventName: string, listener: EventListener<T>, useLocal?: boolean): void;
+  on<T>(
+    eventName: string,
+    listener: EventListener<T>,
+    useLocal?: boolean
+  ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
   /**
@@ -182,5 +190,16 @@ export interface IEmitter {
    * Can be of type corresponding to ClientMessage
    * @param topicUrl Optional queue/topic url for logging purposes
    */
-  processMessage<T extends EmitterType>(message: ClientMessage[T], topicUrl?: string): Promise<void>;
+  processMessage<T extends EmitterType>(
+    message: ClientMessage[T],
+    topicUrl?: string
+  ): Promise<void>;
+
+  /**
+   * 
+   * @param topic The topic object
+   * @returns Reference to the topic. In case of SQS, this is 
+   * the queue arn.
+   */
+  getTopicReference(topic: Topic): string;
 }
