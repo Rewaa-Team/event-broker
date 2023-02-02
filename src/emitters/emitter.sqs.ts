@@ -102,6 +102,9 @@ export class SqsEmitter implements IEmitter {
   }
 
   async createQueues(dlqs: boolean = false) {
+    if(this.options.createTopics === false) {
+      return;
+    }
     const uniqueQueueMap: Map<string, boolean> = new Map();
     const queueCreationPromises: Promise<void>[] = [];
     for (const topicKey in this.queueMap) {

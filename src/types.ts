@@ -158,7 +158,8 @@ export interface IEmitterOptions {
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Set to true if you want the broker to create topics
+   * Set to false if you want the broker to not create topics,
+   * Default is true
    */
   createTopics?: boolean;
 }
