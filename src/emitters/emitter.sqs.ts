@@ -55,7 +55,7 @@ export class SqsEmitter implements IEmitter {
   }
 
   async createQueue(queueName: string, topic: Topic, isDLQ: boolean = false) {
-    const queueAttributes: Record<string, string> = {
+    let queueAttributes: Record<string, string> = {
       DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
         isDLQ
@@ -88,21 +88,23 @@ export class SqsEmitter implements IEmitter {
       isDLQ,
     };
     if (isDLQ) {
-      let dlQueueAttributes: Record<string, string> = {};
-      let attributes = await this.producer.getQueueAttributes(queueUrl!, [
-        "QueueArn",
-      ]);
-      if (attributes) {
-        dlQueueAttributes = attributes;
-      }
       //Not consuming DLQs
       queue.isConsuming = false;
-      queue.arn = dlQueueAttributes?.QueueArn;
     }
+    let attributes = await this.producer.getQueueAttributes(queueUrl!, [
+      "QueueArn",
+    ]);
+    if (attributes) {
+      queueAttributes = { ...queueAttributes, ...attributes };
+    }
+    queue.arn = queueAttributes?.QueueArn;
     this.queues.set(queueName, queue);
   }
 
   async createQueues(dlqs: boolean = false) {
+    if(this.options.createTopics === false) {
+      return;
+    }
     const uniqueQueueMap: Map<string, boolean> = new Map();
     const queueCreationPromises: Promise<void>[] = [];
     for (const topicKey in this.queueMap) {
@@ -326,6 +328,17 @@ export class SqsEmitter implements IEmitter {
     return await this.handleMessageReceipt(
       message as Message,
       topicUrl || CUSTOM_HANDLER_NAME
+    );
+  }
+
+  getTopicReference(topic: Topic): string {
+    return (
+      this.queues.get(
+        this.getQueueName(
+          topic,
+          topic.deadLetterQueueEnabled && this.options.deadLetterQueueEnabled
+        )
+      )?.arn || ""
     );
   }
 }
