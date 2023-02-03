@@ -42,7 +42,6 @@ export class Emitter implements IEmitter {
   on(eventName: string, listener: EventListener<any>, useLocal?: boolean) {
     if (
       this.options.useExternalBroker &&
-      this.options.isConsumer &&
       !useLocal
     ) {
       this.emitter?.on(eventName, listener);
