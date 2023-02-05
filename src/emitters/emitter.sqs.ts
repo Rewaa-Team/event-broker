@@ -51,10 +51,10 @@ export class SqsEmitter implements IEmitter {
 
   private async loadQueues() {
     try {
-      let existingQueues: any = readFileSync("queues.json", {
+      let existingQueues: any = readFileSync(this.getQueuesFileName(), {
         encoding: "utf-8",
       });
-      if (existingQueues && existingQueues.length) {
+      if (existingQueues && existingQueues.length && !this.options.refreshTopicsCache) {
         existingQueues = new Map(JSON.parse(existingQueues, (key, value) => mapReviver(key, value)));
         this.queues = existingQueues;
         logger(`Queues loaded from saved file`);
@@ -77,7 +77,7 @@ export class SqsEmitter implements IEmitter {
   }
 
   private writeQueuesFile() {
-    writeFileSync("queues.json", JSON.stringify(this.queues, (key, value) => mapReplacer(key, value)));
+    writeFileSync(this.getQueuesFileName(), JSON.stringify(this.queues, (key, value) => mapReplacer(key, value)));
   }
 
   private async createQueue(
@@ -158,6 +158,10 @@ export class SqsEmitter implements IEmitter {
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
+
+  private getQueuesFileName = (): string => {
+    return `${this.options.serviceName || ''}_event_broker_queues.json`;
+  }
 
   private getQueueUrlForEvent = (eventName: string): string | undefined => {
     return this.queues.get(this.getQueueName(this.queueMap[eventName]))?.url;
