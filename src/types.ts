@@ -157,6 +157,14 @@ export interface IEmitterOptions {
    * will be used when maxRetryCount is exceeded for a topic
    */
   deadLetterQueueEnabled?: boolean;
+  /**
+   * Used as prefix for the any temporary files created
+   */
+  serviceName?: string;
+  /**
+   * Use this to force load topics from external clients
+   */
+  refreshTopicsCache?: boolean;
 }
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
