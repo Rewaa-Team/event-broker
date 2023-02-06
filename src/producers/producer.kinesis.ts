@@ -30,7 +30,7 @@ export class KinesisProducer {
     message: IKinesisMessage
   ): Promise<PutRecordCommandOutput> => {
     const params: PutRecordCommandInput = {
-      Data: Buffer.from(JSON.stringify(message), "base64"),
+      Data: Uint8Array.from(Buffer.from(JSON.stringify(message), 'utf8')),
       PartitionKey: message.partitionKey,
       StreamName: streamName,
     };
