@@ -1,6 +1,12 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
+import { KinesisClientConfig, _Record } from "@aws-sdk/client-kinesis";
+
+export enum ExchangeType {
+  Direct = "Direct",
+  Fanout = "Fanout",
+}
 
 export interface ISQSMessage {
   data: any;
@@ -38,7 +44,7 @@ export interface IEmitOptions {
 
 export interface IFailedEventMessage {
   topic?: string;
-  queueUrl?: string;
+  topicReference?: string;
   event: any;
   error?: any;
 }
@@ -93,6 +99,12 @@ export interface Topic {
    * By default, the value will be whatever is in IEmitterOptions
    */
   deadLetterQueueEnabled?: boolean;
+  /**
+   * The type of exchange for this topic
+   * Direct exchange type uses SQS
+   * Fanout exchange type uses Kinesis
+   */
+  exchangeType: ExchangeType;
 }
 
 export interface IEventTopicMap {
@@ -105,6 +117,7 @@ export interface IEventTopicMap {
 
 export enum EmitterType {
   SQS = "SQS",
+  KINESIS = "KINESIS",
 }
 
 export interface IEmitterOptions {
@@ -152,6 +165,10 @@ export interface IEmitterOptions {
    */
   sqsConfig?: SQSClientConfig;
   /**
+   * Optional Kinesis Client config used by message producer
+   */
+  kinesisConfig?: KinesisClientConfig;
+  /**
    * Set to true if you want to use DLQs
    * Every topic will have a DLQ created against it that
    * will be used when maxRetryCount is exceeded for a topic
@@ -170,7 +187,8 @@ export interface IEmitterOptions {
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export type ClientMessage = {
-  [EmitterType.SQS]: Message;
+  [ExchangeType.Direct]: Message;
+  [ExchangeType.Fanout]: _Record;
 };
 
 export interface IEmitter {
@@ -190,20 +208,27 @@ export interface IEmitter {
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
+   * @param exchangeType The type of exchange
    * @param message The message received from queue/topic
    * Can be of type corresponding to ClientMessage
-   * @param topicUrl Optional queue/topic url for logging purposes
+   * @param topicUrl Optional queue/topic reference for logging purposes
    */
-  processMessage<T extends EmitterType>(
+  processMessage<T extends ExchangeType>(
+    exchangeType: T,
     message: ClientMessage[T],
-    topicUrl?: string
+    topicUrl?: string | undefined
   ): Promise<void>;
-
   /**
-   * 
+   *
    * @param topic The topic object
-   * @returns Reference to the topic. In case of SQS, this is 
+   * @returns Reference to the topic. In case of SQS, this is
    * the queue arn.
    */
   getTopicReference(topic: Topic): string;
+}
+
+export interface IKinesisMessage {
+  data: any;
+  eventName: string;
+  partitionKey: string;
 }
