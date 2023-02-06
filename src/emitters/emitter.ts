@@ -2,17 +2,19 @@ import { EventEmitter } from "events";
 import { SqsEmitter } from "./emitter.sqs";
 import {
   ClientMessage,
-  EmitterType,
   EventListener,
+  ExchangeType,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
+  IEventTopicMap,
   Topic,
 } from "../types";
+import { KinesisEmitter } from "./emitter.kinesis";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
-  private emitter: IEmitter | undefined;
+  private emitterMap: Map<ExchangeType, IEmitter | undefined> = new Map();
   private options: IEmitterOptions;
 
   constructor(options: IEmitterOptions) {
@@ -21,12 +23,25 @@ export class Emitter implements IEmitter {
   async initialize(options: IEmitterOptions) {
     this.options = options;
     this.options.localEmitter = this.localEmitter;
-    if (
-      this.options.useExternalBroker &&
-      this.options.emitterType === EmitterType.SQS
-    ) {
-      this.emitter = new SqsEmitter();
-      await this.emitter.initialize(this.options);
+    if (this.options.useExternalBroker) {
+      const directTopics = this.getTopicsOfType(ExchangeType.Direct);
+      const fanoutTopics = this.getTopicsOfType(ExchangeType.Fanout);
+      if (Object.keys(directTopics).length) {
+        const emitter = new SqsEmitter();
+        await emitter.initialize({
+          ...this.options,
+          eventTopicMap: directTopics,
+        });
+        this.emitterMap.set(ExchangeType.Direct, emitter);
+      }
+      if (Object.keys(fanoutTopics).length) {
+        const emitter = new KinesisEmitter();
+        await emitter.initialize({
+          ...this.options,
+          eventTopicMap: directTopics,
+        });
+        this.emitterMap.set(ExchangeType.Fanout, emitter);
+      }
     }
   }
   async emit(
@@ -35,38 +50,55 @@ export class Emitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     if (this.options.useExternalBroker && !options?.useLocalEmitter) {
-      return !!(await this.emitter?.emit(eventName, options, ...args));
+      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
+      return !!(await emitter?.emit(eventName, options, ...args));
     }
     return this.localEmitter.emit(eventName, ...args);
   }
   on(eventName: string, listener: EventListener<any>, useLocal?: boolean) {
-    if (
-      this.options.useExternalBroker &&
-      !useLocal
-    ) {
-      this.emitter?.on(eventName, listener);
+    if (this.options.useExternalBroker && !useLocal) {
+      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
+      emitter?.on(eventName, listener);
       return;
     }
     this.localEmitter.on(eventName, listener);
   }
   removeListener(eventName: string, listener: EventListener<any>) {
     if (this.options.useExternalBroker) {
-      this.emitter?.removeListener(eventName, listener);
+      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
+      emitter?.removeListener(eventName, listener);
       return;
     }
     this.localEmitter.removeListener(eventName, listener);
   }
   removeAllListener() {
     if (this.options.useExternalBroker) {
-      this.emitter?.removeAllListener();
+      for(const key in this.emitterMap) {
+        this.emitterMap.get(key as ExchangeType)?.removeAllListener();
+      }
       return;
     }
     this.localEmitter.removeAllListeners();
   }
-  async processMessage<T extends EmitterType>(message: ClientMessage[T], topicUrl?: string | undefined): Promise<void> {
-      return await this.emitter?.processMessage(message, topicUrl);
+  async processMessage<T extends ExchangeType>(
+    exchangeType: T,
+    message: ClientMessage[T],
+    topicUrl?: string | undefined
+  ): Promise<void> {
+    const emitter = this.emitterMap.get(exchangeType);
+    return await emitter?.processMessage(exchangeType, message, topicUrl);
   }
   getTopicReference(topic: Topic): string {
-      return this.emitter?.getTopicReference(topic) || '';
+    const emitter = this.emitterMap.get(topic.exchangeType);
+    return emitter?.getTopicReference(topic) || '';
+  }
+  private getTopicsOfType(type: ExchangeType): IEventTopicMap {
+    const topics: IEventTopicMap = {};
+    for (const key in this.options.eventTopicMap) {
+      if (this.options.eventTopicMap[key].exchangeType === type) {
+        topics[key] = this.options.eventTopicMap[key];
+      }
+    }
+    return topics;
   }
 }

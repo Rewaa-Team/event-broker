@@ -15,7 +15,7 @@ import { logger } from "../utils";
 import { v4 } from "uuid";
 
 export class SQSProducer {
-  private sqs: SQS;
+  private readonly sqs: SQS;
   constructor(config: SQSClientConfig) {
     this.sqs = new SQS(config);
   }

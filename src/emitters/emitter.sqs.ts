@@ -25,7 +25,7 @@ import {
   IEmitOptions,
   EventListener,
   ClientMessage,
-  EmitterType,
+  ExchangeType,
 } from "../types";
 import { logger, mapReplacer, mapReviver } from "../utils";
 import { Message } from "@aws-sdk/client-sqs";
@@ -283,7 +283,7 @@ export class SqsEmitter implements IEmitter {
   private handleMessageReceipt = async (message: Message, queueUrl: string) => {
     const key = v4();
     logger(
-      `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
+      `SQS Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
     );
     const messageConsumptionStartTime = new Date();
     await this.onMessageReceived(message, queueUrl);
@@ -295,9 +295,9 @@ export class SqsEmitter implements IEmitter {
       difference >
       (this.options.maxProcessingTime || DEFAULT_MAX_PROCESSING_TIME)
     ) {
-      logger(`Slow message ${queueUrl}_${key}_${new Date()}`);
+      logger(`SQS Slow message ${queueUrl}_${key}_${new Date()}`);
     }
-    logger(`Message ended ${queueUrl}_${key}_${new Date()}`);
+    logger(`SQS Message ended ${queueUrl}_${key}_${new Date()}`);
   };
 
   removeListener(eventName: string, listener: EventListener<any>) {
@@ -321,7 +321,7 @@ export class SqsEmitter implements IEmitter {
     } catch (error) {
       logger("Failed to parse message");
       this.logFailedEvent({
-        queueUrl: queueUrl,
+        topicReference: queueUrl,
         event: receivedMessage.Body,
         error: `Failed to parse message`,
       });
@@ -352,7 +352,8 @@ export class SqsEmitter implements IEmitter {
     }
   }
 
-  async processMessage<T extends EmitterType>(
+  async processMessage<T extends ExchangeType>(
+    exchangeType: T,
     message: ClientMessage[T],
     topicUrl?: string | undefined
   ): Promise<void> {
