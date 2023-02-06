@@ -38,7 +38,7 @@ export class Emitter implements IEmitter {
         const emitter = new KinesisEmitter();
         await emitter.initialize({
           ...this.options,
-          eventTopicMap: directTopics,
+          eventTopicMap: fanoutTopics,
         });
         this.emitterMap.set(ExchangeType.Fanout, emitter);
       }
