@@ -177,12 +177,12 @@ export class KinesisEmitter implements IEmitter {
   private async onMessageReceived(receivedMessage: any, streamARN: string) {
     let message: IKinesisMessage;
     try {
-      message = JSON.parse(receivedMessage.body);
+      message = JSON.parse(receivedMessage.data);
     } catch (error) {
       logger("Kinesis Failed to parse message");
       this.logFailedEvent({
         topicReference: streamARN,
-        event: receivedMessage.Body,
+        event: receivedMessage.data,
         error: `Kinesis Failed to parse message`,
       });
       throw new Error(`Kinesis Failed to parse message`);
