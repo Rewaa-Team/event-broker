@@ -152,7 +152,7 @@ export class KinesisEmitter implements IEmitter {
     const key = v4();
     let data: any = message.Data;
     if(data) {
-      data = Buffer.from(data).toString('utf8');
+      data = Buffer.from(data, 'base64').toString('utf8');
     }
     logger(
       `Kinesis Message started ${streamARN}_${key}_${new Date()}_${data}`
