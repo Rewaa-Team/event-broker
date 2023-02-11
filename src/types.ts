@@ -1,7 +1,6 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
-import { KinesisClientConfig, _Record } from "@aws-sdk/client-kinesis";
 
 export enum ExchangeType {
   Direct = "Direct",
@@ -71,10 +70,10 @@ export interface Topic {
    */
   isConsuming: boolean;
   /**
-   * Optional prefix to differentiate topics from other
-   * services using same topic name
+   * Prefix to differentiate topics from other
+   * services using the same topic name
    */
-  servicePrefix?: string;
+  servicePrefix: string;
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
@@ -102,7 +101,7 @@ export interface Topic {
   /**
    * The type of exchange for this topic
    * Direct exchange type uses SQS
-   * Fanout exchange type uses Kinesis
+   * Fanout exchange type uses SNS + SQS
    */
   exchangeType: ExchangeType;
 }
@@ -117,7 +116,7 @@ export interface IEventTopicMap {
 
 export enum EmitterType {
   SQS = "SQS",
-  KINESIS = "KINESIS",
+  SNS_SQS = "SNS_SQS",
 }
 
 export interface IEmitterOptions {
@@ -165,9 +164,9 @@ export interface IEmitterOptions {
    */
   sqsConfig?: SQSClientConfig;
   /**
-   * Optional Kinesis Client config used by message producer
+   * Optional SNS Client config used by message producer
    */
-  kinesisConfig?: KinesisClientConfig;
+  snsConfig?: SQSClientConfig;
   /**
    * Set to true if you want to use DLQs
    * Every topic will have a DLQ created against it that
@@ -176,8 +175,9 @@ export interface IEmitterOptions {
   deadLetterQueueEnabled?: boolean;
   /**
    * Used as prefix for the any temporary files created
+   * and as prefix to any queues created in Fanout mode
    */
-  serviceName?: string;
+  serviceName: string;
   /**
    * Use this to force load topics from external clients
    */
@@ -188,7 +188,7 @@ export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export type ClientMessage = {
   [ExchangeType.Direct]: Message;
-  [ExchangeType.Fanout]: _Record;
+  [ExchangeType.Fanout]: Message;
 };
 
 export interface IEmitter {
@@ -225,10 +225,16 @@ export interface IEmitter {
    * the queue arn.
    */
   getTopicReference(topic: Topic): string;
+  /**
+   * Start consuming messages for consuming topics
+   */
+  startConsumers(): Promise<void>;
 }
 
-export interface IKinesisMessage {
+export interface ISNSMessage {
   data: any;
   eventName: string;
-  partitionKey: string;
+  messageGroupId?: string;
 }
+
+export type SQSMessageHandler = (message: Message) => Promise<void>;

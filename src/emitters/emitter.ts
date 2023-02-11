@@ -10,7 +10,7 @@ import {
   IEventTopicMap,
   Topic,
 } from "../types";
-import { KinesisEmitter } from "./emitter.kinesis";
+import { SnsEmitter } from "./emitter.sns";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
@@ -35,7 +35,7 @@ export class Emitter implements IEmitter {
         this.emitterMap.set(ExchangeType.Direct, emitter);
       }
       if (Object.keys(fanoutTopics).length) {
-        const emitter = new KinesisEmitter();
+        const emitter = new SnsEmitter();
         await emitter.initialize({
           ...this.options,
           eventTopicMap: fanoutTopics,
@@ -73,7 +73,7 @@ export class Emitter implements IEmitter {
   }
   removeAllListener() {
     if (this.options.useExternalBroker) {
-      for(const key in this.emitterMap) {
+      for (const key in this.emitterMap) {
         this.emitterMap.get(key as ExchangeType)?.removeAllListener();
       }
       return;
@@ -91,6 +91,13 @@ export class Emitter implements IEmitter {
   getTopicReference(topic: Topic): string {
     const emitter = this.emitterMap.get(topic.exchangeType);
     return emitter?.getTopicReference(topic) || '';
+  }
+  async startConsumers(): Promise<void> {
+    if (this.options.useExternalBroker && this.options.isConsumer) {
+      for (const key in this.emitterMap) {
+        await this.emitterMap.get(key as ExchangeType)?.startConsumers();
+      }
+    }
   }
   private getTopicsOfType(type: ExchangeType): IEventTopicMap {
     const topics: IEventTopicMap = {};

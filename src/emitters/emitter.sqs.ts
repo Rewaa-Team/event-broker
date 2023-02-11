@@ -3,11 +3,8 @@ import { Consumer } from "sqs-consumer";
 import {
   CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
-  DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MAX_PROCESSING_TIME,
-  DEFAULT_MAX_RETRIES,
   DEFAULT_MESSAGE_DELAY,
-  DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
   SOURCE_QUEUE_PREFIX,
@@ -27,9 +24,8 @@ import {
   ClientMessage,
   ExchangeType,
 } from "../types";
-import { logger, mapReplacer, mapReviver } from "../utils";
+import { loadDataFromFile, logger, mapReplacer, mapReviver, writeDataToFile } from "../utils";
 import { Message } from "@aws-sdk/client-sqs";
-import { readFileSync, writeFileSync } from "fs";
 
 export class SqsEmitter implements IEmitter {
   private producer!: SQSProducer;
@@ -46,26 +42,16 @@ export class SqsEmitter implements IEmitter {
     this.queueMap = this.options.eventTopicMap;
     this.producer = new SQSProducer(this.options.sqsConfig || {});
     await this.loadQueues();
-    await this.initializeConsumer();
   }
 
   private async loadQueues() {
-    try {
-      let existingQueues: any = readFileSync(this.getQueuesFileName(), {
-        encoding: "utf-8",
-      });
-      if (existingQueues && existingQueues.length && !this.options.refreshTopicsCache) {
-        existingQueues = new Map(JSON.parse(existingQueues, (key, value) => mapReviver(key, value)));
-        this.queues = existingQueues;
-        logger(`Queues loaded from saved file`);
-        return;
-      }
-    } catch (error: any) {
-      if (error.code !== "ENOENT") {
-        throw error;
-      }
+    let existingQueues = loadDataFromFile(this.getQueuesFileName());
+    if (existingQueues && existingQueues.length && !this.options.refreshTopicsCache) {
+      existingQueues = new Map(JSON.parse(existingQueues, (key, value) => mapReviver(key, value)));
+      this.queues = existingQueues;
+      logger(`Topics loaded from saved file`);
+      return;
     }
-
     if (this.options.deadLetterQueueEnabled) {
       // Create DLQs first so that the TargetARN can be used in source queue
       await this.createQueues(true);
@@ -73,11 +59,7 @@ export class SqsEmitter implements IEmitter {
     }
     await this.createQueues();
     logger(`Source queues created`);
-    this.writeQueuesFile();
-  }
-
-  private writeQueuesFile() {
-    writeFileSync(this.getQueuesFileName(), JSON.stringify(this.queues, (key, value) => mapReplacer(key, value)));
+    writeDataToFile(this.getQueuesFileName(), JSON.stringify(this.queues, (key, value) => mapReplacer(key, value)));
   }
 
   private async createQueue(
@@ -85,49 +67,13 @@ export class SqsEmitter implements IEmitter {
     topic: Topic,
     isDLQ: boolean = false
   ) {
-    let queueAttributes: Record<string, string> = {
-      DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
-      MessageRetentionPeriod: `${
-        isDLQ
-          ? DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD
-          : DEFAULT_MESSAGE_RETENTION_PERIOD
-      }`,
-    };
-    topic.batchSize;
-    if (
-      !isDLQ &&
-      this.options.deadLetterQueueEnabled &&
-      topic.deadLetterQueueEnabled !== false
-    ) {
-      queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${
-        this.queues.get(this.getQueueName(topic, true))?.arn
-      }\",\"maxReceiveCount\":\"${
-        topic.maxRetryCount || DEFAULT_MAX_RETRIES
-      }\"}`;
-    }
-    const queueUrl = await this.producer.createQueue(
+    const queue = await this.producer.createQueueFromTopic({
       queueName,
-      queueAttributes
-    );
-    const queue: Queue = {
-      isFifo: topic.isFifo,
-      isConsuming: topic.isConsuming,
-      batchSize: topic.batchSize,
-      visibilityTimeout: topic.visibilityTimeout,
-      url: queueUrl,
+      topic,
       isDLQ,
-    };
-    if (isDLQ) {
-      //Not consuming DLQs
-      queue.isConsuming = false;
-    }
-    let attributes = await this.producer.getQueueAttributes(queueUrl!, [
-      "QueueArn",
-    ]);
-    if (attributes) {
-      queueAttributes = { ...queueAttributes, ...attributes };
-    }
-    queue.arn = queueAttributes?.QueueArn;
+      globalDLQEnabled: !!this.options.deadLetterQueueEnabled,
+      dlqArn: this.queues.get(this.getQueueName(topic, true))?.arn
+    });
     this.queues.set(queueName, queue);
   }
 
@@ -154,13 +100,12 @@ export class SqsEmitter implements IEmitter {
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
     const qName = topic.name.replace(".fifo", "");
-    return `${this.options.environment}_${topic.servicePrefix || ""}_${
-      isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
-    }_${qName}${topic.isFifo ? ".fifo" : ""}`;
+    return `${this.options.environment}_${topic.servicePrefix}_${isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
+      }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
 
   private getQueuesFileName = (): string => {
-    return `${this.options.serviceName || ''}_event_broker_queues.json`;
+    return `${this.options.serviceName}_event_broker_queues_direct.json`;
   }
 
   private getQueueUrlForEvent = (eventName: string): string | undefined => {
@@ -207,8 +152,8 @@ export class SqsEmitter implements IEmitter {
     }
   }
 
-  private async initializeConsumer() {
-    if (this.consumersStarted || !this.options.isConsumer) {
+  async startConsumers() {
+    if (this.consumersStarted) {
       return;
     }
     this.queues.forEach((queue) => {

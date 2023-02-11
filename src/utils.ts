@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "fs";
+
 export const logger = (message: any) =>
   console.log(`EventBrokerLog :::
 ${message}
@@ -21,3 +23,20 @@ export const mapReviver = (key: string, value: any) => {
   }
   return value;
 };
+
+export const loadDataFromFile = (filePath: string) => {
+  try {
+    let data: any = readFileSync(filePath, {
+      encoding: "utf-8",
+    });
+    return data;
+  } catch (error: any) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+export const writeDataToFile = (filePath: string, data: any) => {
+  writeFileSync(filePath, data);
+}

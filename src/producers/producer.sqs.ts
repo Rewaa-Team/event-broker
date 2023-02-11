@@ -10,9 +10,12 @@ import {
 import {
   ISQSMessage,
   ISQSMessageOptions,
+  Queue,
+  Topic,
 } from "../types";
 import { logger } from "../utils";
 import { v4 } from "uuid";
+import { DEFAULT_MESSAGE_DELAY, DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD, DEFAULT_MESSAGE_RETENTION_PERIOD, DEFAULT_MAX_RETRIES } from "src/constants";
 
 export class SQSProducer {
   private readonly sqs: SQS;
@@ -70,6 +73,57 @@ export class SQSProducer {
       throw error;
     }
   };
+
+  async createQueueFromTopic(params: {
+    queueName: string,
+    topic: Topic,
+    isDLQ: boolean,
+    globalDLQEnabled: boolean,
+    dlqArn?: string
+  }
+  ) {
+    const { queueName, topic, isDLQ, globalDLQEnabled, dlqArn } = params;
+    let queueAttributes: Record<string, string> = {
+      DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
+      MessageRetentionPeriod: `${isDLQ
+        ? DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD
+        : DEFAULT_MESSAGE_RETENTION_PERIOD
+        }`,
+    };
+    if (
+      !isDLQ &&
+      globalDLQEnabled &&
+      topic.deadLetterQueueEnabled !== false
+    ) {
+      queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${dlqArn
+        }\",\"maxReceiveCount\":\"${topic.maxRetryCount || DEFAULT_MAX_RETRIES
+        }\"}`;
+    }
+    const queueUrl = await this.createQueue(
+      queueName,
+      queueAttributes
+    );
+    const queue: Queue = {
+      isFifo: topic.isFifo,
+      isConsuming: topic.isConsuming,
+      batchSize: topic.batchSize,
+      visibilityTimeout: topic.visibilityTimeout,
+      url: queueUrl,
+      isDLQ,
+    };
+    if (isDLQ) {
+      //Not consuming DLQs
+      queue.isConsuming = false;
+    }
+    let attributes = await this.getQueueAttributes(queueUrl!, [
+      "QueueArn",
+    ]);
+    if (attributes) {
+      queueAttributes = { ...queueAttributes, ...attributes };
+    }
+    queue.arn = queueAttributes?.QueueArn;
+    return queue;
+  }
 
   getQueueAttributes = async (
     queueUrl: string,
