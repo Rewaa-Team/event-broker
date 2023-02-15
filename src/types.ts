@@ -141,14 +141,16 @@ export interface IEmitterOptions {
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Used as prefix for the any temporary files created
-   * and as prefix to any queues created in Fanout mode
+   * Used as prefix for internal queues
    */
-  servicePrefix: string;
+  consumerGroup: string;
   /**
    * Use this to force load topics from external clients
    */
   refreshTopicsCache?: boolean;
+  /**
+   * Optional default queues options
+   */
   defaultQueueOptions?: {
     fifo?: DefaultQueueOptions,
     standard?: DefaultQueueOptions
@@ -172,13 +174,14 @@ export interface IEmitterOptions {
   log?: boolean;
 }
 
-export type DefaultQueueOptions = Omit<ConsumeOptions, 'separate' | 'exchangeType'>;
+export type DefaultQueueOptions = Omit<ConsumeOptions, 'separate'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
   /**
    * Must be called before using any other function
+   * and after all Emitter.on
    */
   initialize(): void;
   /**

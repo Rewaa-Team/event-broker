@@ -213,7 +213,7 @@ export class SqnsEmitter implements IEmitter {
       : topic.isFifo
       ? DEFAULT_QUEUE_NAME_FIFO
       : DEFAULT_QUEUE_NAME_STANDARD;
-    return `${this.options.environment}_${this.options.servicePrefix}_${
+    return `${this.options.environment}_${this.options.consumerGroup}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
