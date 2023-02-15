@@ -17,28 +17,22 @@ export interface ISQSMessageOptions {
   delay: number;
 }
 
-export interface ISQSQueueCreateOptions {
-  delay: string;
-  messageRetentionPeriod: string;
-}
-
 export interface IEmitOptions {
   /**
    * use with FIFO Topic/Queue to ensure the ordering of events
-   * For SQS client, refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
+   * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
-  /**
-   * Delay message for a specific time before which they can be
-   * processed. Specify in seconds.
-   * Max value is 900
-   */
-  delay?: number;
   /**
    * Set to true if using local emitter to emit on the
    * local node emitter
    */
   useLocalEmitter?: boolean;
+  /**
+   * Delay receiving the message in seconds
+   * Only applicable to DIRECT ExchangeType
+   */
+  delay?: number
 }
 
 export interface IFailedEventMessage {
@@ -50,10 +44,8 @@ export interface IFailedEventMessage {
 
 export interface Queue {
   isFifo: boolean;
-  isConsuming: boolean;
   consumer?: Consumer;
   url?: string;
-  arn?: string;
   isDLQ?: boolean;
   visibilityTimeout?: number;
   batchSize?: number;
@@ -65,15 +57,6 @@ export interface Topic {
    * Set to true if topic is FIFO, default is false
    */
   isFifo: boolean;
-  /**
-   * Set to true if you are consuming this topic
-   */
-  isConsuming: boolean;
-  /**
-   * Prefix to differentiate topics from other
-   * services using the same topic name
-   */
-  servicePrefix: string;
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
@@ -104,7 +87,15 @@ export interface Topic {
    * Fanout exchange type uses SNS + SQS
    */
   exchangeType: ExchangeType;
+  /**
+   * Set to true if you want to use a separate queue
+   */
+  separate?: boolean;
 }
+
+export type ConsumeOptions = Omit<Topic, 'name' | 'arn'> & {
+  useLocal?: boolean;
+};
 
 export interface IEventTopicMap {
   /**
@@ -114,25 +105,15 @@ export interface IEventTopicMap {
   [eventName: string]: Topic;
 }
 
-export enum EmitterType {
-  SQS = "SQS",
-  SNS_SQS = "SNS_SQS",
-}
-
 export interface IEmitterOptions {
   /**
    * Set to true if you are consuming any topic
    */
   isConsumer?: boolean;
   /**
-   * Map of events to topics
-   */
-  eventTopicMap: IEventTopicMap;
-  /**
    * Set to true if using external broker as client like SQS
    */
   useExternalBroker?: boolean;
-  emitterType: EmitterType;
   /**
    * Optional, to log slow messages
    * Unit: ms
@@ -177,12 +158,30 @@ export interface IEmitterOptions {
    * Used as prefix for the any temporary files created
    * and as prefix to any queues created in Fanout mode
    */
-  serviceName: string;
+  servicePrefix: string;
   /**
    * Use this to force load topics from external clients
    */
   refreshTopicsCache?: boolean;
+  defaultQueueOptions?: {
+    fifo?: DefaultQueueOptions,
+    standard?: DefaultQueueOptions
+  };
+  /**
+   * Optional AWS Config used by the emitter when useExternalBroker is true
+   */
+  awsConfig?: {
+    region: string;
+    accountId: string;
+  }
+  /**
+   * Custom validator for schema validation
+   * Called when a message is received
+   */
+  schemaValidator?: SchemaValidator;
 }
+
+export type DefaultQueueOptions = Omit<ConsumeOptions, 'separate' | 'exchangeType'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
@@ -192,7 +191,7 @@ export type ClientMessage = {
 };
 
 export interface IEmitter {
-  initialize(options: IEmitterOptions): Promise<void>;
+  initialize(): Promise<void>;
   emit(
     eventName: string,
     options?: IEmitOptions,
@@ -201,7 +200,7 @@ export interface IEmitter {
   on<T>(
     eventName: string,
     listener: EventListener<T>,
-    useLocal?: boolean
+    options: ConsumeOptions
   ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
@@ -219,16 +218,15 @@ export interface IEmitter {
     topicUrl?: string | undefined
   ): Promise<void>;
   /**
-   *
    * @param topic The topic object
-   * @returns Reference to the topic. In case of SQS, this is
-   * the queue arn.
+   * @returns ARN of the topic.
    */
-  getTopicReference(topic: Topic): string;
+  getProducerReference(topic: Topic): string;
   /**
-   * Start consuming messages for consuming topics
+   * @param topic The topic object
+   * @returns ARN of the consuming queue.
    */
-  startConsumers(): Promise<void>;
+  getConsumerReference(topic: Topic): string;
 }
 
 export interface ISNSMessage {
@@ -237,4 +235,6 @@ export interface ISNSMessage {
   messageGroupId?: string;
 }
 
-export type SQSMessageHandler = (message: Message) => Promise<void>;
+export interface SchemaValidator {
+  validate(message: Message): Promise<void>;
+}

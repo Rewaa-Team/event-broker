@@ -1,48 +1,31 @@
 import { EventEmitter } from "events";
-import { SqsEmitter } from "./emitter.sqs";
 import {
   ClientMessage,
+  ConsumeOptions,
   EventListener,
   ExchangeType,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
-  IEventTopicMap,
   Topic,
 } from "../types";
-import { SnsEmitter } from "./emitter.sns";
+import { SqnsEmitter } from "./emitter.sqns";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
-  private emitterMap: Map<ExchangeType, IEmitter | undefined> = new Map();
-  private options: IEmitterOptions;
+  private emitter!: IEmitter;
+  private options!: IEmitterOptions;
 
   constructor(options: IEmitterOptions) {
     this.options = options;
-  }
-  async initialize(options: IEmitterOptions) {
-    this.options = options;
     this.options.localEmitter = this.localEmitter;
     if (this.options.useExternalBroker) {
-      const directTopics = this.getTopicsOfType(ExchangeType.Direct);
-      const fanoutTopics = this.getTopicsOfType(ExchangeType.Fanout);
-      if (Object.keys(directTopics).length) {
-        const emitter = new SqsEmitter();
-        await emitter.initialize({
-          ...this.options,
-          eventTopicMap: directTopics,
-        });
-        this.emitterMap.set(ExchangeType.Direct, emitter);
-      }
-      if (Object.keys(fanoutTopics).length) {
-        const emitter = new SnsEmitter();
-        await emitter.initialize({
-          ...this.options,
-          eventTopicMap: fanoutTopics,
-        });
-        this.emitterMap.set(ExchangeType.Fanout, emitter);
-      }
+      this.emitter = new SqnsEmitter(this.options);
     }
+  }
+
+  async initialize() {
+    await this.emitter.initialize();
   }
   async emit(
     eventName: string,
@@ -50,32 +33,27 @@ export class Emitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     if (this.options.useExternalBroker && !options?.useLocalEmitter) {
-      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
-      return !!(await emitter?.emit(eventName, options, ...args));
+      return !!(await this.emitter.emit(eventName, options, ...args));
     }
     return this.localEmitter.emit(eventName, ...args);
   }
-  on(eventName: string, listener: EventListener<any>, useLocal?: boolean) {
-    if (this.options.useExternalBroker && !useLocal) {
-      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
-      emitter?.on(eventName, listener);
+  on(eventName: string, listener: EventListener<any>, options: ConsumeOptions) {
+    if (this.options.useExternalBroker && !options.useLocal) {
+      this.emitter.on(eventName, listener, options);
       return;
     }
     this.localEmitter.on(eventName, listener);
   }
   removeListener(eventName: string, listener: EventListener<any>) {
     if (this.options.useExternalBroker) {
-      const emitter = this.emitterMap.get(this.options.eventTopicMap[eventName].exchangeType);
-      emitter?.removeListener(eventName, listener);
+      this.emitter.removeListener(eventName, listener);
       return;
     }
     this.localEmitter.removeListener(eventName, listener);
   }
   removeAllListener() {
     if (this.options.useExternalBroker) {
-      for (const key in this.emitterMap) {
-        this.emitterMap.get(key as ExchangeType)?.removeAllListener();
-      }
+      this.emitter.removeAllListener();
       return;
     }
     this.localEmitter.removeAllListeners();
@@ -85,27 +63,72 @@ export class Emitter implements IEmitter {
     message: ClientMessage[T],
     topicUrl?: string | undefined
   ): Promise<void> {
-    const emitter = this.emitterMap.get(exchangeType);
-    return await emitter?.processMessage(exchangeType, message, topicUrl);
+    return await this.emitter.processMessage(exchangeType, message, topicUrl);
   }
-  getTopicReference(topic: Topic): string {
-    const emitter = this.emitterMap.get(topic.exchangeType);
-    return emitter?.getTopicReference(topic) || '';
+  getProducerReference(topic: Topic): string {
+    return this.emitter.getProducerReference(topic) || '';
   }
-  async startConsumers(): Promise<void> {
-    if (this.options.useExternalBroker && this.options.isConsumer) {
-      for (const key in this.emitterMap) {
-        await this.emitterMap.get(key as ExchangeType)?.startConsumers();
-      }
-    }
-  }
-  private getTopicsOfType(type: ExchangeType): IEventTopicMap {
-    const topics: IEventTopicMap = {};
-    for (const key in this.options.eventTopicMap) {
-      if (this.options.eventTopicMap[key].exchangeType === type) {
-        topics[key] = this.options.eventTopicMap[key];
-      }
-    }
-    return topics;
+  getConsumerReference(topic: Topic): string {
+    return this.emitter.getConsumerReference(topic) || '';
   }
 }
+
+const test = async () => {
+  const emitter = new Emitter({
+    environment: `local`,
+    localEmitter: new EventEmitter(),
+    useExternalBroker: true,
+    isConsumer: true,
+    deadLetterQueueEnabled: true,
+    servicePrefix: 'test',
+    awsConfig: {
+      region: 'us-east-1',
+      accountId: '063696436519'
+    }
+});
+  emitter.on('TEST_TOPIC', async (data) => {
+    console.log(`ewgwegwe`)
+    console.log(data);
+  }, {
+    exchangeType: ExchangeType.Direct,
+    isFifo: true,
+  })
+  emitter.on('TEST_TOPIC_2', async (data) => {
+    console.log(`ewgwegwe`)
+    console.log(data);
+  }, {
+    exchangeType: ExchangeType.Direct,
+    isFifo: false,
+  })
+  emitter.on('TEST_TOPIC_3', async (data) => {
+    console.log(`ewgwegwe`)
+    console.log(data);
+  }, {
+    exchangeType: ExchangeType.Direct,
+    isFifo: true,
+  })
+  emitter.on('TEST_TOPIC_5', async (data) => {
+    console.log(`ewgwegwe`)
+    console.log(data);
+  }, {
+    exchangeType: ExchangeType.Direct,
+    isFifo: true,
+    separate: true
+  })
+  emitter.on('TEST_TOPIC_4', async (data) => {
+    console.log(`ewgwegwe`)
+    console.log(data);
+  }, {
+    exchangeType: ExchangeType.Direct,
+    isFifo: false,
+    separate: true
+  })
+  await emitter.initialize();
+await emitter.emit('TEST_TOPIC', {}, {'hi': 'TEST_TOPIC'});
+await emitter.emit('TEST_TOPIC_2', {}, {'hi': 'TEST_TOPIC_2'});
+await emitter.emit('TEST_TOPIC_3', {}, {'hi': 'TEST_TOPIC_3'});
+await emitter.emit('TEST_TOPIC_5', {}, {'hi': 'TEST_TOPIC_5'});
+await emitter.emit('TEST_TOPIC_4', {}, {'hi': 'TEST_TOPIC_4'});
+}
+
+test()

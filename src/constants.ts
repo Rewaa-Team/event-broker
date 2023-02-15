@@ -8,4 +8,6 @@ export const DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD = 172800;
 export const DEFAULT_MAX_RETRIES = 3;
 export const DLQ_PREFIX = 'D';
 export const SOURCE_QUEUE_PREFIX = 'S';
-export const CUSTOM_HANDLER_NAME = '_CUSTOM_HANDLER_'
+export const CUSTOM_HANDLER_NAME = '_CUSTOM_HANDLER_';
+export const DEFAULT_QUEUE_NAME_FIFO = 'default_fifo';
+export const DEFAULT_QUEUE_NAME_STANDARD = 'default';

@@ -10,7 +10,7 @@ import {
 import {
     ISNSMessage,
 } from "../types";
-import { logger } from "../utils";
+import { Logger } from "../utils";
 import { v4 } from "uuid";
 
 export class SNSProducer {
@@ -57,7 +57,7 @@ export class SNSProducer {
             const { TopicArn } = await this.sns.createTopic(params);
             return TopicArn;
         } catch (error) {
-            logger(`Topic creation failed: ${topicName}`);
+            Logger.error(`Topic creation failed: ${topicName}`);
             throw error;
         }
     };
@@ -71,7 +71,7 @@ export class SNSProducer {
         try {
             return await this.sns.subscribe(params);
         } catch (error) {
-            logger(`Topic subscription failed: ${queueArn} to ${topicArn}`);
+            Logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
             throw error;
         }
     }
