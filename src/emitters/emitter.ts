@@ -44,9 +44,9 @@ export class Emitter implements IEmitter {
     }
     return this.localEmitter.emit(eventName, ...args);
   }
-  on(eventName: string, options: ConsumeOptions, listener: EventListener<any>) {
-    if (this.options.useExternalBroker && !options.useLocal) {
-      this.emitter.on(eventName, options, listener);
+  on(eventName: string, listener: EventListener<any>, options?: ConsumeOptions,) {
+    if (this.options.useExternalBroker && !options?.useLocal) {
+      this.emitter.on(eventName, listener, options);
       return;
     }
     this.localEmitter.on(eventName, listener);

@@ -22,7 +22,6 @@ import {
   IEmitOptions,
   EventListener,
   ConsumeOptions,
-  ISNSMessage,
   ISNSReceiveMessage,
 } from "../types";
 import { Logger } from "../utils";
@@ -69,7 +68,7 @@ export class SqnsEmitter implements IEmitter {
       }
       uniqueQueueMap.set(queueName, true);
       const queue: Queue = {
-        isFifo: topic.isFifo,
+        isFifo: !!topic.isFifo,
         batchSize: topic.batchSize,
         visibilityTimeout: topic.visibilityTimeout,
         url: this.getQueueUrl(queueName),
@@ -371,7 +370,7 @@ export class SqnsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  on(eventName: string, options: ConsumeOptions, listener: EventListener<any>) {
+  on(eventName: string, listener: EventListener<any>, options?: ConsumeOptions) {
     let listeners = this.topicListeners.get(eventName) || [];
     listeners.push(listener);
     this.topicListeners.set(eventName, listeners);

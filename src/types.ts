@@ -47,7 +47,7 @@ export interface Topic {
   /**
    * Set to true if topic is FIFO, default is false
    */
-  isFifo: boolean;
+  isFifo?: boolean;
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
@@ -82,7 +82,7 @@ export interface Topic {
   separate?: boolean;
 }
 
-export type ConsumeOptions = Omit<Topic, 'name' | 'arn'> & {
+export type ConsumeOptions = Omit<Topic, 'name'> & {
   useLocal?: boolean;
 };
 
@@ -192,8 +192,8 @@ export interface IEmitter {
   ): Promise<boolean>;
   on<T>(
     eventName: string,
-    options: ConsumeOptions,
-    listener: EventListener<T>
+    listener: EventListener<T>,
+    options?: ConsumeOptions,
   ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
