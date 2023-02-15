@@ -108,15 +108,7 @@ export class SQSProducer {
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
     }
-    const queueUrl = await this.createQueue(queueName, queueAttributes);
-    const queue: Queue = {
-      isFifo: topic.isFifo,
-      batchSize: topic.batchSize,
-      visibilityTimeout: topic.visibilityTimeout,
-      url: queueUrl,
-      isDLQ,
-    };
-    return queue;
+    await this.createQueue(queueName, queueAttributes);
   }
 
   getQueueAttributes = async (

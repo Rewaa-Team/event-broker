@@ -1,14 +1,13 @@
+import { Message } from "@aws-sdk/client-sqs";
 import { EventEmitter } from "events";
 import {
-  ClientMessage,
   ConsumeOptions,
   EventListener,
-  ExchangeType,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
-  Topic,
 } from "../types";
+import { Logger } from "../utils";
 import { SqnsEmitter } from "./emitter.sqns";
 
 export class Emitter implements IEmitter {
@@ -19,13 +18,21 @@ export class Emitter implements IEmitter {
   constructor(options: IEmitterOptions) {
     this.options = options;
     this.options.localEmitter = this.localEmitter;
+    Logger.logsEnabled = !!this.options.log;
     if (this.options.useExternalBroker) {
       this.emitter = new SqnsEmitter(this.options);
     }
   }
 
-  async initialize() {
-    await this.emitter.initialize();
+  initialize() {
+    if (this.options.useExternalBroker) {
+      this.emitter.initialize();
+    }
+  }
+  async bootstrap() {
+    if (this.options.useExternalBroker) {
+      await this.emitter.bootstrap();
+    }
   }
   async emit(
     eventName: string,
@@ -37,9 +44,9 @@ export class Emitter implements IEmitter {
     }
     return this.localEmitter.emit(eventName, ...args);
   }
-  on(eventName: string, listener: EventListener<any>, options: ConsumeOptions) {
+  on(eventName: string, options: ConsumeOptions, listener: EventListener<any>) {
     if (this.options.useExternalBroker && !options.useLocal) {
-      this.emitter.on(eventName, listener, options);
+      this.emitter.on(eventName, options, listener);
       return;
     }
     this.localEmitter.on(eventName, listener);
@@ -58,17 +65,19 @@ export class Emitter implements IEmitter {
     }
     this.localEmitter.removeAllListeners();
   }
-  async processMessage<T extends ExchangeType>(
-    exchangeType: T,
-    message: ClientMessage[T],
+  async processMessage(
+    message: Message,
     topicUrl?: string | undefined
   ): Promise<void> {
-    return await this.emitter.processMessage(exchangeType, message, topicUrl);
+    return await this.emitter.processMessage(message, topicUrl);
   }
-  getProducerReference(topic: Topic): string {
-    return this.emitter.getProducerReference(topic) || '';
+  async startConsumers(): Promise<void> {
+    await this.emitter.startConsumers();
   }
-  getConsumerReference(topic: Topic): string {
-    return this.emitter.getConsumerReference(topic) || '';
+  getProducerReference(topicName: string): string {
+    return this.emitter.getProducerReference(topicName) || "";
+  }
+  getConsumerReference(topicName: string): string {
+    return this.emitter.getConsumerReference(topicName) || "";
   }
 }

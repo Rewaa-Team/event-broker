@@ -5,7 +5,6 @@ import {
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
   DEFAULT_MAX_RETRIES,
-  DEFAULT_MESSAGE_DELAY,
   DEFAULT_QUEUE_NAME_FIFO,
   DEFAULT_QUEUE_NAME_STANDARD,
   DEFAULT_VISIBILITY_TIMEOUT,
@@ -22,9 +21,9 @@ import {
   IFailedEventMessage,
   IEmitOptions,
   EventListener,
-  ClientMessage,
-  ExchangeType,
   ConsumeOptions,
+  ISNSMessage,
+  ISNSReceiveMessage,
 } from "../types";
 import { Logger } from "../utils";
 import { Message } from "@aws-sdk/client-sqs";
@@ -54,7 +53,33 @@ export class SqnsEmitter implements IEmitter {
     this.sqsProducer = new SQSProducer(this.options.sqsConfig || {});
   }
 
-  async initialize(): Promise<void> {
+  initialize() {
+    if (this.options.isConsumer) {
+      this.addDefaultQueues();
+    }
+    this.createQueueMap();
+  }
+
+  private createQueueMap() {
+    const uniqueQueueMap: Map<string, boolean> = new Map();
+    this.topics.forEach((topic) => {
+      const queueName = this.getQueueName(topic);
+      if (uniqueQueueMap.has(queueName)) {
+        return;
+      }
+      uniqueQueueMap.set(queueName, true);
+      const queue: Queue = {
+        isFifo: topic.isFifo,
+        batchSize: topic.batchSize,
+        visibilityTimeout: topic.visibilityTimeout,
+        url: this.getQueueUrl(queueName),
+        isDLQ: false,
+      };
+      this.queues.set(queueName, queue);
+    });
+  }
+
+  async bootstrap(): Promise<void> {
     await this.createTopics();
     if (this.options.isConsumer) {
       this.addDefaultQueues();
@@ -65,14 +90,12 @@ export class SqnsEmitter implements IEmitter {
     }
     await this.createQueues();
     await this.subscribeToTopics();
-    await this.startConsumers();
   }
 
   private addDefaultQueues() {
     const defaultFifoQueueOptions = {
       ...this.options.defaultQueueOptions?.fifo,
       name: DEFAULT_QUEUE_NAME_FIFO,
-      exchangeType: ExchangeType.Direct,
       isFifo: true,
       isDefaultQueue: true,
     };
@@ -85,7 +108,6 @@ export class SqnsEmitter implements IEmitter {
     const defaultStandardQueueOptions = {
       ...this.options.defaultQueueOptions?.standard,
       name: DEFAULT_QUEUE_NAME_STANDARD,
-      exchangeType: ExchangeType.Direct,
       isFifo: false,
       isDefaultQueue: true,
     };
@@ -100,19 +122,18 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(DEFAULT_QUEUE_NAME_STANDARD, defaultStandardQueueOptions);
   }
 
-  private async createTopic(topicName: string, topic: Topic) {
+  private async createTopic(topic: Topic) {
     let topicAttributes: Record<string, string> = {};
     await this.snsProducer.createTopic(
       this.getTopicName(topic),
       topicAttributes
     );
-    this.topics.set(topicName, topic);
   }
 
   private async createTopics() {
     const topicCreationPromises: Promise<void>[] = [];
-    this.topics.forEach((topic, name) => {
-      topicCreationPromises.push(this.createTopic(name, topic));
+    this.topics.forEach((topic) => {
+      topicCreationPromises.push(this.createTopic(topic));
     });
     await Promise.all(topicCreationPromises);
     Logger.info(`Topics created`);
@@ -123,7 +144,7 @@ export class SqnsEmitter implements IEmitter {
     topic: Topic,
     isDLQ: boolean = false
   ) {
-    const queue = await this.sqsProducer.createQueueFromTopic({
+    await this.sqsProducer.createQueueFromTopic({
       queueName,
       topic,
       isDLQ,
@@ -131,7 +152,6 @@ export class SqnsEmitter implements IEmitter {
       queueArn: this.getQueueArn(this.getQueueName(topic)),
       dlqArn: this.getQueueArn(this.getQueueName(topic, true)),
     });
-    this.queues.set(queueName, queue);
   }
 
   private async createQueues(dlqs: boolean = false) {
@@ -213,46 +233,6 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter.emit(this.options.eventOnFailure, data);
   };
 
-  async emitToTopic(
-    topic: Topic,
-    options?: IEmitOptions,
-    ...args: any[]
-  ): Promise<boolean> {
-    const topicArn = this.getTopicArn(this.getTopicName(topic));
-    if (!topicArn) {
-      throw new Error(`Topic ARN not found: ${topic.name}`);
-    }
-    await this.snsProducer.send(topicArn, {
-      messageGroupId: options?.partitionKey || topic.name,
-      eventName: topic.name,
-      data: args,
-    });
-    return true;
-  }
-
-  async emitToQueue(
-    topic: Topic,
-    options?: IEmitOptions,
-    ...args: any[]
-  ): Promise<boolean> {
-    const queueUrl = this.getQueueUrl(this.getQueueName(topic));
-    if (!queueUrl) {
-      throw new Error(`Queue URL not found: ${topic.name}`);
-    }
-    await this.sqsProducer.send(
-      queueUrl,
-      {
-        messageGroupId: options?.partitionKey || topic.name,
-        eventName: topic.name,
-        data: args,
-      },
-      {
-        delay: options?.delay || DEFAULT_MESSAGE_DELAY,
-      }
-    );
-    return true;
-  }
-
   async emit(
     eventName: string,
     options?: IEmitOptions,
@@ -263,12 +243,17 @@ export class SqnsEmitter implements IEmitter {
       if (!topic) {
         throw new Error(`Topic not found for event: ${eventName}`);
       }
-      if (topic.exchangeType === ExchangeType.Direct) {
-        return await this.emitToQueue(topic, options, ...args);
-      }
-      return await this.emitToTopic(topic, options, ...args);
+      const topicArn = this.getTopicArn(this.getTopicName(topic));
+      await this.snsProducer.send(topicArn, {
+        messageGroupId: options?.partitionKey || topic.name,
+        eventName: topic.name,
+        data: args,
+      });
+      return true;
     } catch (error) {
-      Logger.error(`Message producing failed: ${eventName} ${JSON.stringify(error)}`);
+      Logger.error(
+        `Message producing failed: ${eventName} ${JSON.stringify(error)}`
+      );
       this.logFailedEvent({
         topic: eventName,
         event: args,
@@ -286,13 +271,13 @@ export class SqnsEmitter implements IEmitter {
       if (!queue || queue.isDLQ) {
         return;
       }
-      this.attachConsumer(queue);
+      this.startConsumer(queue);
     });
     this.consumersStarted = true;
     Logger.info(`Consumers started`);
   }
 
-  private attachConsumer(queue: Queue) {
+  private startConsumer(queue: Queue) {
     if (!queue.url) {
       return;
     }
@@ -386,7 +371,7 @@ export class SqnsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  on(eventName: string, listener: EventListener<any>, options: ConsumeOptions) {
+  on(eventName: string, options: ConsumeOptions, listener: EventListener<any>) {
     let listeners = this.topicListeners.get(eventName) || [];
     listeners.push(listener);
     this.topicListeners.set(eventName, listeners);
@@ -397,10 +382,12 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
   }
 
-  private async onMessageReceived(receivedMessage: any, queueUrl: string) {
+  private async onMessageReceived(receivedMessage: Message, queueUrl: string) {
+    let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
     try {
-      message = JSON.parse(receivedMessage.Body.toString());
+      snsMessage = JSON.parse(receivedMessage.Body!.toString());
+      message = JSON.parse(snsMessage.Message);
     } catch (error) {
       Logger.error("Failed to parse message");
       this.logFailedEvent({
@@ -435,9 +422,8 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  async processMessage<T extends ExchangeType>(
-    exchangeType: T,
-    message: ClientMessage[T],
+  async processMessage(
+    message: Message,
     topicUrl?: string | undefined
   ): Promise<void> {
     return await this.handleMessageReceipt(
@@ -446,11 +432,19 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  getProducerReference(topic: Topic): string {
+  getProducerReference(topicName: string): string {
+    const topic = this.topics.get(topicName);
+    if (!topic) {
+      throw new Error(`Topic not found ${topicName}`);
+    }
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
 
-  getConsumerReference(topic: Topic): string {
+  getConsumerReference(topicName: string): string {
+    const topic = this.topics.get(topicName);
+    if (!topic) {
+      throw new Error(`Topic not found ${topicName}`);
+    }
     return this.getQueueArn(this.getQueueName(topic)) || "";
   }
 }

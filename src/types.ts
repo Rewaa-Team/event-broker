@@ -2,11 +2,6 @@ import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
 
-export enum ExchangeType {
-  Direct = "Direct",
-  Fanout = "Fanout",
-}
-
 export interface ISQSMessage {
   data: any;
   eventName: string;
@@ -19,7 +14,8 @@ export interface ISQSMessageOptions {
 
 export interface IEmitOptions {
   /**
-   * use with FIFO Topic/Queue to ensure the ordering of events
+   * Use with FIFO Topic/Queue to ensure the ordering of events
+   * 
    * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
@@ -28,11 +24,6 @@ export interface IEmitOptions {
    * local node emitter
    */
   useLocalEmitter?: boolean;
-  /**
-   * Delay receiving the message in seconds
-   * Only applicable to DIRECT ExchangeType
-   */
-  delay?: number
 }
 
 export interface IFailedEventMessage {
@@ -60,7 +51,9 @@ export interface Topic {
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
+   * 
    * Unit: s
+   * 
    * Default: 360s
    */
   visibilityTimeout?: number;
@@ -72,21 +65,17 @@ export interface Topic {
    * Maximum number the broker will attempt to retry the message
    * before which it is added to the related DLQ if deadLetterQueueEnabled
    * is true in emitter options
+   * 
    * Default: 3
    */
   maxRetryCount?: number;
 
   /**
    * Topic level DLQ specification
+   * 
    * By default, the value will be whatever is in IEmitterOptions
    */
   deadLetterQueueEnabled?: boolean;
-  /**
-   * The type of exchange for this topic
-   * Direct exchange type uses SQS
-   * Fanout exchange type uses SNS + SQS
-   */
-  exchangeType: ExchangeType;
   /**
    * Set to true if you want to use a separate queue
    */
@@ -96,14 +85,6 @@ export interface Topic {
 export type ConsumeOptions = Omit<Topic, 'name' | 'arn'> & {
   useLocal?: boolean;
 };
-
-export interface IEventTopicMap {
-  /**
-   * Map events to topics.
-   * Multiple events maybe mapped to the same topic
-   */
-  [eventName: string]: Topic;
-}
 
 export interface IEmitterOptions {
   /**
@@ -116,7 +97,9 @@ export interface IEmitterOptions {
   useExternalBroker?: boolean;
   /**
    * Optional, to log slow messages
+   * 
    * Unit: ms
+   * 
    * Default: 60000ms
    */
   maxProcessingTime?: number;
@@ -129,14 +112,16 @@ export interface IEmitterOptions {
    */
   localEmitter: EventEmitter;
   /**
-   * An optional event on which failed events will be emitted.
-   * These include failures when sending and consuming messages.
+   * An optional event on which failed events will be emitted
+   * 
+   * These include failures when sending and consuming messages
    */
   eventOnFailure?: string;
   /**
    * Maximum number of times the broker will retry the message
    * in case of failure in consumption after which it will be
    * moved to a DLQ if deadLetterQueueEnabled is true
+   * 
    * Default: 3
    */
   maxRetries?: number;
@@ -150,6 +135,7 @@ export interface IEmitterOptions {
   snsConfig?: SQSClientConfig;
   /**
    * Set to true if you want to use DLQs
+   * 
    * Every topic will have a DLQ created against it that
    * will be used when maxRetryCount is exceeded for a topic
    */
@@ -176,22 +162,29 @@ export interface IEmitterOptions {
   }
   /**
    * Custom validator for schema validation
+   * 
    * Called when a message is received
    */
   schemaValidator?: SchemaValidator;
+  /**
+   * Set to true to enable logging
+   */
+  log?: boolean;
 }
 
 export type DefaultQueueOptions = Omit<ConsumeOptions, 'separate' | 'exchangeType'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
-export type ClientMessage = {
-  [ExchangeType.Direct]: Message;
-  [ExchangeType.Fanout]: Message;
-};
-
 export interface IEmitter {
-  initialize(): Promise<void>;
+  /**
+   * Must be called before using any other function
+   */
+  initialize(): void;
+  /**
+   * Call during setup for creation of topics and queues
+   */
+  bootstrap(): Promise<void>;
   emit(
     eventName: string,
     options?: IEmitOptions,
@@ -199,40 +192,53 @@ export interface IEmitter {
   ): Promise<boolean>;
   on<T>(
     eventName: string,
-    listener: EventListener<T>,
-    options: ConsumeOptions
+    options: ConsumeOptions,
+    listener: EventListener<T>
   ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
-   * @param exchangeType The type of exchange
-   * @param message The message received from queue/topic
-   * Can be of type corresponding to ClientMessage
+   * @param message The message received from topic
    * @param topicUrl Optional queue/topic reference for logging purposes
    */
-  processMessage<T extends ExchangeType>(
-    exchangeType: T,
-    message: ClientMessage[T],
+  processMessage(
+    message: Message,
     topicUrl?: string | undefined
   ): Promise<void>;
   /**
    * @param topic The topic object
    * @returns ARN of the topic.
    */
-  getProducerReference(topic: Topic): string;
+  getProducerReference(topicName: string): string;
   /**
    * @param topic The topic object
    * @returns ARN of the consuming queue.
    */
-  getConsumerReference(topic: Topic): string;
+  getConsumerReference(topicName: string): string;
+  /**
+   * Start consuming the topics
+   */
+  startConsumers(): Promise<void>;
 }
 
 export interface ISNSMessage {
   data: any;
   eventName: string;
   messageGroupId?: string;
+}
+
+export interface ISNSReceiveMessage {
+  Message: string;
+  MessageId: string;
+  Signature: string;
+  SignatureVersion: string;
+  SigningCertURL: string;
+  Timestamp: string;
+  TopicArn: string;
+  Type: string;
+  UnsubscribeURL: string;
 }
 
 export interface SchemaValidator {
