@@ -14,16 +14,17 @@ export interface ISQSMessageOptions {
 
 export interface IEmitOptions {
   /**
+   * Set to true when emitting to fifo topic
+   * 
+   * Default is false
+   */
+  isFifo?: boolean;
+  /**
    * Use with FIFO Topic/Queue to ensure the ordering of events
    * 
    * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
-  /**
-   * Set to true if using local emitter to emit on the
-   * local node emitter
-   */
-  useLocalEmitter?: boolean;
 }
 
 export interface IFailedEventMessage {
@@ -180,11 +181,6 @@ export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
   /**
-   * Must be called before using any other function
-   * and after all Emitter.on
-   */
-  initialize(): void;
-  /**
    * Call during setup for creation of topics and queues
    */
   bootstrap(): Promise<void>;
@@ -214,12 +210,12 @@ export interface IEmitter {
    * @param topic The topic object
    * @returns ARN of the topic.
    */
-  getProducerReference(topicName: string): string;
+  getProducerReference(topicName: string, isFifo?: boolean): string;
   /**
    * @param topic The topic object
    * @returns ARN of the consuming queue.
    */
-  getConsumerReference(topicName: string): string;
+  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string;
   /**
    * Start consuming the topics
    */

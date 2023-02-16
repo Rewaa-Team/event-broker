@@ -50,32 +50,9 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter = options.localEmitter;
     this.snsProducer = new SNSProducer(this.options.snsConfig || {});
     this.sqsProducer = new SQSProducer(this.options.sqsConfig || {});
-  }
-
-  initialize() {
     if (this.options.isConsumer) {
       this.addDefaultQueues();
     }
-    this.createQueueMap();
-  }
-
-  private createQueueMap() {
-    const uniqueQueueMap: Map<string, boolean> = new Map();
-    this.topics.forEach((topic) => {
-      const queueName = this.getQueueName(topic);
-      if (uniqueQueueMap.has(queueName)) {
-        return;
-      }
-      uniqueQueueMap.set(queueName, true);
-      const queue: Queue = {
-        isFifo: !!topic.isFifo,
-        batchSize: topic.batchSize,
-        visibilityTimeout: topic.visibilityTimeout,
-        url: this.getQueueUrl(queueName),
-        isDLQ: false,
-      };
-      this.queues.set(queueName, queue);
-    });
   }
 
   async bootstrap(): Promise<void> {
@@ -238,13 +215,13 @@ export class SqnsEmitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     try {
-      const topic = this.topics.get(eventName);
-      if (!topic) {
-        throw new Error(`Topic not found for event: ${eventName}`);
+      const topic: Topic = {
+        name: eventName,
+        isFifo: !!options?.isFifo
       }
       const topicArn = this.getTopicArn(this.getTopicName(topic));
       await this.snsProducer.send(topicArn, {
-        messageGroupId: options?.partitionKey || topic.name,
+        messageGroupId: `${options?.partitionKey || ''}_${topic.name}`,
         eventName: topic.name,
         data: args,
       });
@@ -370,7 +347,11 @@ export class SqnsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  on(eventName: string, listener: EventListener<any>, options?: ConsumeOptions) {
+  on(
+    eventName: string,
+    listener: EventListener<any>,
+    options?: ConsumeOptions
+  ) {
     let listeners = this.topicListeners.get(eventName) || [];
     listeners.push(listener);
     this.topicListeners.set(eventName, listeners);
@@ -379,6 +360,17 @@ export class SqnsEmitter implements IEmitter {
       name: eventName,
     };
     this.topics.set(eventName, topic);
+    const queueName = this.getQueueName(topic);
+    if (!this.queues.has(queueName)) {
+      const queue: Queue = {
+        isFifo: !!topic.isFifo,
+        batchSize: topic.batchSize,
+        visibilityTimeout: topic.visibilityTimeout,
+        url: this.getQueueUrl(queueName),
+        isDLQ: false,
+      };
+      this.queues.set(queueName, queue);
+    }
   }
 
   private async onMessageReceived(receivedMessage: Message, queueUrl: string) {
@@ -431,18 +423,19 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  getProducerReference(topicName: string): string {
-    const topic = this.topics.get(topicName);
-    if (!topic) {
-      throw new Error(`Topic not found ${topicName}`);
+  getProducerReference(topicName: string, isFifo?: boolean): string {
+    const topic: Topic = {
+      name: topicName,
+      isFifo: isFifo
     }
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
 
-  getConsumerReference(topicName: string): string {
-    const topic = this.topics.get(topicName);
-    if (!topic) {
-      throw new Error(`Topic not found ${topicName}`);
+  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string {
+    const topic: Topic = {
+      name: topicName,
+      isFifo: isFifo,
+      separate: separate
     }
     return this.getQueueArn(this.getQueueName(topic)) || "";
   }

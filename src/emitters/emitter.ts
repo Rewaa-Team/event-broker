@@ -24,11 +24,6 @@ export class Emitter implements IEmitter {
     }
   }
 
-  initialize() {
-    if (this.options.useExternalBroker) {
-      this.emitter.initialize();
-    }
-  }
   async bootstrap() {
     if (this.options.useExternalBroker) {
       await this.emitter.bootstrap();
@@ -39,12 +34,19 @@ export class Emitter implements IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean> {
-    if (this.options.useExternalBroker && !options?.useLocalEmitter) {
+    if (this.options.useExternalBroker) {
       return !!(await this.emitter.emit(eventName, options, ...args));
     }
+    return false;
+  }
+  emitLocal(eventName: string, ...args: any[]) {
     return this.localEmitter.emit(eventName, ...args);
   }
-  on(eventName: string, listener: EventListener<any>, options?: ConsumeOptions,) {
+  on(
+    eventName: string,
+    listener: EventListener<any>,
+    options?: ConsumeOptions
+  ) {
     if (this.options.useExternalBroker && !options?.useLocal) {
       this.emitter.on(eventName, listener, options);
       return;
@@ -74,10 +76,10 @@ export class Emitter implements IEmitter {
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();
   }
-  getProducerReference(topicName: string): string {
-    return this.emitter.getProducerReference(topicName) || "";
+  getProducerReference(topicName: string, isFifo?: boolean): string {
+    return this.emitter.getProducerReference(topicName, isFifo) || "";
   }
-  getConsumerReference(topicName: string): string {
-    return this.emitter.getConsumerReference(topicName) || "";
+  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string {
+    return this.emitter.getConsumerReference(topicName, separate, isFifo) || "";
   }
 }
