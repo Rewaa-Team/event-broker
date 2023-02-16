@@ -57,9 +57,6 @@ export class SqnsEmitter implements IEmitter {
 
   async bootstrap(): Promise<void> {
     await this.createTopics();
-    if (this.options.isConsumer) {
-      this.addDefaultQueues();
-    }
     if (this.options.deadLetterQueueEnabled) {
       // Create DLQs first so that the TargetARN can be used in source queue
       await this.createQueues(true);
