@@ -35,9 +35,11 @@ export interface IFailedEventMessage {
 }
 
 export interface Queue {
+  name: string;
   isFifo: boolean;
   consumer?: Consumer;
   url?: string;
+  arn?: string;
   isDLQ?: boolean;
   visibilityTimeout?: number;
   batchSize?: number;
@@ -93,7 +95,7 @@ export interface IEmitterOptions {
    */
   isConsumer?: boolean;
   /**
-   * Set to true if using external broker as client like SQS
+   * Set to true if using external broker as client
    */
   useExternalBroker?: boolean;
   /**
@@ -181,9 +183,11 @@ export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
   /**
-   * Call during setup for creation of topics and queues
+   * Call for creation of topics and queues
+   * @param topics An optional array of topics.
+   * Only required if Emitter.on is not used
    */
-  bootstrap(): Promise<void>;
+  bootstrap(topics?: Topic[]): Promise<void>;
   emit(
     eventName: string,
     options?: IEmitOptions,
@@ -207,15 +211,35 @@ export interface IEmitter {
     topicUrl?: string | undefined
   ): Promise<void>;
   /**
-   * @param topic The topic object
-   * @returns ARN of the topic.
+   * @param topicName Actual topic name
+   * @param isFifo Set to true if Topic is FIFO
    */
-  getProducerReference(topicName: string, isFifo?: boolean): string;
+  getTopicReference(topicName: string, isFifo?: boolean): string;
   /**
-   * @param topic The topic object
-   * @returns ARN of the consuming queue.
+   * @param topicName Actual topic name
+   * @param separate Set to true when using a separate Topic
+   * @param isFifo Set to true if Topic is FIFO
    */
   getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string;
+  /**
+   * 
+   * @param topicName Actual topic name
+   * @param isFifo Set to true if Topic is FIFO
+   * @returns Name of Topic that the broker generates internally
+   */
+  getInternalTopicName(topicName: string, isFifo?: boolean): string;
+  /**
+   * 
+   * @param topicName Actual topic name
+   * @param separate Set to true when using a separate Topic
+   * @param isFifo Set to true if Topic is FIFO
+   */
+  getInternalQueueName(topicName: string, separate?: boolean, isFifo?: boolean): string;
+  /**
+   * @returns An array of all the queues being consumed
+   * by the broker
+   */
+  getConsumingQueues(): Queue[];
   /**
    * Start consuming the topics
    */

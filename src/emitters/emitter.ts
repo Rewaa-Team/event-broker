@@ -6,6 +6,7 @@ import {
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
+  Queue,
 } from "../types";
 import { Logger } from "../utils";
 import { SqnsEmitter } from "./emitter.sqns";
@@ -76,10 +77,19 @@ export class Emitter implements IEmitter {
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();
   }
-  getProducerReference(topicName: string, isFifo?: boolean): string {
-    return this.emitter.getProducerReference(topicName, isFifo) || "";
+  getTopicReference(topicName: string, isFifo?: boolean): string {
+    return this.emitter.getTopicReference(topicName, isFifo) || "";
   }
   getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string {
     return this.emitter.getConsumerReference(topicName, separate, isFifo) || "";
+  }
+  getInternalTopicName(topicName: string, isFifo?: boolean): string {
+    return this.emitter.getInternalTopicName(topicName, isFifo);
+  }
+  getInternalQueueName(topicName: string, separate?: boolean, isFifo?: boolean): string {
+    return this.getInternalQueueName(topicName, separate, isFifo);
+  }
+  getConsumingQueues(): Queue[] {
+      return this.emitter.getConsumingQueues();
   }
 }

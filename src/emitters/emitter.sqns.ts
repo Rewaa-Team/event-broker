@@ -55,7 +55,12 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  async bootstrap(): Promise<void> {
+  async bootstrap(topics?: Topic[]) {
+    if (topics?.length) {
+      topics.forEach((topic) => {
+        this.on(topic.name, async () => {}, ...(topic as any));
+      });
+    }
     await this.createTopics();
     if (this.options.deadLetterQueueEnabled) {
       // Create DLQs first so that the TargetARN can be used in source queue
@@ -214,11 +219,11 @@ export class SqnsEmitter implements IEmitter {
     try {
       const topic: Topic = {
         name: eventName,
-        isFifo: !!options?.isFifo
-      }
+        isFifo: !!options?.isFifo,
+      };
       const topicArn = this.getTopicArn(this.getTopicName(topic));
       await this.snsProducer.send(topicArn, {
-        messageGroupId: `${options?.partitionKey || ''}_${topic.name}`,
+        messageGroupId: `${options?.partitionKey || ""}_${topic.name}`,
         eventName: topic.name,
         data: args,
       });
@@ -360,10 +365,12 @@ export class SqnsEmitter implements IEmitter {
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
       const queue: Queue = {
+        name: this.getQueueName(topic),
         isFifo: !!topic.isFifo,
         batchSize: topic.batchSize,
         visibilityTimeout: topic.visibilityTimeout,
         url: this.getQueueUrl(queueName),
+        arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
       };
       this.queues.set(queueName, queue);
@@ -420,20 +427,53 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  getProducerReference(topicName: string, isFifo?: boolean): string {
-    const topic: Topic = {
-      name: topicName,
-      isFifo: isFifo
-    }
-    return this.getTopicArn(this.getTopicName(topic)) || "";
-  }
-
-  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string {
+  getTopicReference(topicName: string, isFifo?: boolean): string {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
-      separate: separate
-    }
+    };
+    return this.getTopicArn(this.getTopicName(topic)) || "";
+  }
+
+  getConsumerReference(
+    topicName: string,
+    separate?: boolean,
+    isFifo?: boolean
+  ): string {
+    const topic: Topic = {
+      name: topicName,
+      isFifo: isFifo,
+      separate: separate,
+    };
     return this.getQueueArn(this.getQueueName(topic)) || "";
+  }
+
+  getInternalTopicName(topicName: string, isFifo?: boolean): string {
+    const topic: Topic = {
+      name: topicName,
+      isFifo: isFifo,
+    };
+    return this.getTopicName(topic) || "";
+  }
+
+  getInternalQueueName(
+    topicName: string,
+    separate?: boolean,
+    isFifo?: boolean
+  ): string {
+    const topic: Topic = {
+      name: topicName,
+      isFifo: isFifo,
+      separate: separate,
+    };
+    return this.getQueueName(topic) || "";
+  }
+
+  getConsumingQueues(): Queue[] {
+    const queues: Queue[] = [];
+    this.queues.forEach((queue) => {
+      queues.push(queue);
+    });
+    return queues;
   }
 }
