@@ -312,16 +312,6 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private handleMessageReceipt = async (message: Message, queueUrl: string) => {
-    if (this.options.schemaValidator) {
-      try {
-        await this.options.schemaValidator.validate(message);
-      } catch (error) {
-        Logger.error(
-          `Schema validation failed for message: ${JSON.stringify(message)}`
-        );
-        throw error;
-      }
-    }
     const key = v4();
     Logger.info(
       `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`

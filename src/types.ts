@@ -166,12 +166,6 @@ export interface IEmitterOptions {
     accountId: string;
   }
   /**
-   * Custom validator for schema validation
-   * 
-   * Called when a message is received
-   */
-  schemaValidator?: SchemaValidator;
-  /**
    * Set to true to enable logging
    */
   log?: boolean;
