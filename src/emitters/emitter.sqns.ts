@@ -50,9 +50,7 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter = options.localEmitter;
     this.snsProducer = new SNSProducer(this.options.snsConfig || {});
     this.sqsProducer = new SQSProducer(this.options.sqsConfig || {});
-    if (this.options.isConsumer) {
-      this.addDefaultQueues();
-    }
+    this.addDefaultQueues();
   }
 
   async bootstrap(topics?: Topic[]) {
@@ -71,33 +69,18 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private addDefaultQueues() {
-    const defaultFifoQueueOptions = {
-      ...this.options.defaultQueueOptions?.fifo,
-      name: DEFAULT_QUEUE_NAME_FIFO,
-      isFifo: true,
-      isDefaultQueue: true,
-    };
-    defaultFifoQueueOptions.batchSize =
-      defaultFifoQueueOptions.batchSize || DEFAULT_BATCH_SIZE;
-    defaultFifoQueueOptions.visibilityTimeout =
-      defaultFifoQueueOptions.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT;
-    defaultFifoQueueOptions.maxRetryCount =
-      defaultFifoQueueOptions.maxRetryCount || DEFAULT_MAX_RETRIES;
-    const defaultStandardQueueOptions = {
-      ...this.options.defaultQueueOptions?.standard,
-      name: DEFAULT_QUEUE_NAME_STANDARD,
-      isFifo: false,
-      isDefaultQueue: true,
-    };
-    defaultStandardQueueOptions.batchSize =
-      defaultStandardQueueOptions.batchSize || DEFAULT_BATCH_SIZE;
-    defaultStandardQueueOptions.visibilityTimeout =
-      defaultStandardQueueOptions.visibilityTimeout ||
-      DEFAULT_VISIBILITY_TIMEOUT;
-    defaultStandardQueueOptions.maxRetryCount =
-      defaultStandardQueueOptions.maxRetryCount || DEFAULT_MAX_RETRIES;
-    this.topics.set(DEFAULT_QUEUE_NAME_FIFO, defaultFifoQueueOptions);
-    this.topics.set(DEFAULT_QUEUE_NAME_STANDARD, defaultStandardQueueOptions);
+    if (!this.options.defaultQueueOptions) {
+      Logger.info(`No default queues specified.`);
+      return;
+    }
+    this.topics.set(this.options.defaultQueueOptions.fifo.name, {
+      ...this.options.defaultQueueOptions.fifo,
+      isDefaultQueue: true
+    });
+    this.topics.set(this.options.defaultQueueOptions.standard.name, {
+      ...this.options.defaultQueueOptions.standard,
+      isDefaultQueue: true
+    });
   }
 
   private async createTopic(topic: Topic) {
@@ -187,8 +170,8 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
-    const qName = topic.separate
-      ? topic.name.replace(".fifo", "")
+    const qName = topic.separateQueueName
+      ? topic.separateQueueName.replace(".fifo", "")
       : topic.isFifo
       ? DEFAULT_QUEUE_NAME_FIFO
       : DEFAULT_QUEUE_NAME_STANDARD;
@@ -242,7 +225,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async startConsumers() {
-    if (this.consumersStarted || !this.options.isConsumer) {
+    if (this.consumersStarted) {
       return;
     }
     this.queues.forEach((queue) => {
@@ -354,8 +337,14 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
+      if(!topic.separateQueueName && !this.options.defaultQueueOptions) {
+        throw new Error(`${topic.name} - separateQueueName is required when defaultQueueOptions are not specified.`);
+      }
       const queue: Queue = {
-        name: this.getQueueName(topic),
+        name:
+          topic.separateQueueName || (topic.isFifo
+            ? this.options.defaultQueueOptions?.fifo.name
+            : this.options.defaultQueueOptions?.standard.name) || '',
         isFifo: !!topic.isFifo,
         batchSize: topic.batchSize,
         visibilityTimeout: topic.visibilityTimeout,
@@ -409,11 +398,11 @@ export class SqnsEmitter implements IEmitter {
 
   async processMessage(
     message: Message,
-    topicUrl?: string | undefined
+    topicReference?: string | undefined
   ): Promise<void> {
     return await this.handleMessageReceipt(
       message as Message,
-      topicUrl || CUSTOM_HANDLER_NAME
+      topicReference || CUSTOM_HANDLER_NAME
     );
   }
 
@@ -427,13 +416,13 @@ export class SqnsEmitter implements IEmitter {
 
   getConsumerReference(
     topicName: string,
-    separate?: boolean,
+    separateQueueName?: string,
     isFifo?: boolean
   ): string {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
-      separate: separate,
+      separateQueueName: separateQueueName,
     };
     return this.getQueueArn(this.getQueueName(topic)) || "";
   }
@@ -448,15 +437,27 @@ export class SqnsEmitter implements IEmitter {
 
   getInternalQueueName(
     topicName: string,
-    separate?: boolean,
+    separateQueueName?: string,
     isFifo?: boolean
   ): string {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
-      separate: separate,
+      separateQueueName: separateQueueName,
     };
     return this.getQueueName(topic) || "";
+  }
+
+  getConsumingQueueReferences(queueNames: string[]): string[] {
+    const queues: string[] = [];
+    let i = 0;
+    this.queues.forEach((queue) => {
+      if(queueNames[i] === queue.name) {
+        queues.push(queue.arn || '');
+        i++;
+      }
+    });
+    return queues;
   }
 
   getConsumingQueues(): Queue[] {

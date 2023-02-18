@@ -80,9 +80,9 @@ export interface Topic {
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Set to true if you want to use a separate queue
+   * Set if you want to use a separate queue
    */
-  separate?: boolean;
+  separateQueueName?: string;
 }
 
 export type ConsumeOptions = Omit<Topic, 'name'> & {
@@ -90,10 +90,6 @@ export type ConsumeOptions = Omit<Topic, 'name'> & {
 };
 
 export interface IEmitterOptions {
-  /**
-   * Set to true if you are consuming any topic
-   */
-  isConsumer?: boolean;
   /**
    * Set to true if using external broker as client
    */
@@ -152,11 +148,14 @@ export interface IEmitterOptions {
    */
   refreshTopicsCache?: boolean;
   /**
-   * Optional default queues options
+   * Optional default queues options when consuming on a default queue
+   * 
+   * When using default queues, Topics for which a separateQueueName 
+   * is not specified are consumed from the default queues.
    */
   defaultQueueOptions?: {
-    fifo?: DefaultQueueOptions,
-    standard?: DefaultQueueOptions
+    fifo: DefaultQueueOptions,
+    standard: DefaultQueueOptions
   };
   /**
    * Optional AWS Config used by the emitter when useExternalBroker is true
@@ -171,7 +170,7 @@ export interface IEmitterOptions {
   log?: boolean;
 }
 
-export type DefaultQueueOptions = Omit<ConsumeOptions, 'separate'>;
+export type DefaultQueueOptions = Omit<Topic, 'separate'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
@@ -198,11 +197,11 @@ export interface IEmitter {
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
    * @param message The message received from topic
-   * @param topicUrl Optional queue/topic reference for logging purposes
+   * @param topicReference Optional topic reference for logging purposes
    */
   processMessage(
     message: Message,
-    topicUrl?: string | undefined
+    topicReference?: string | undefined
   ): Promise<void>;
   /**
    * @param topicName Actual topic name
@@ -211,10 +210,10 @@ export interface IEmitter {
   getTopicReference(topicName: string, isFifo?: boolean): string;
   /**
    * @param topicName Actual topic name
-   * @param separate Set to true when using a separate Topic
+   * @param separateQueueName Set to true when using a separate Queue for Topic
    * @param isFifo Set to true if Topic is FIFO
    */
-  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string;
+  getConsumerReference(topicName: string, separateQueueName?: string, isFifo?: boolean): string;
   /**
    * 
    * @param topicName Actual topic name
@@ -225,10 +224,16 @@ export interface IEmitter {
   /**
    * 
    * @param topicName Actual topic name
-   * @param separate Set to true when using a separate Topic
+   * @param separateQueueName Set when using a separate Queue for Topic
    * @param isFifo Set to true if Topic is FIFO
    */
-  getInternalQueueName(topicName: string, separate?: boolean, isFifo?: boolean): string;
+  getInternalQueueName(topicName: string, separateQueueName?: string, isFifo?: boolean): string;
+  /**
+   * 
+   * @param queueNames names of the queues for which ARN is required
+   * @returns ARNs of the specified queue names in order
+   */
+  getConsumingQueueReferences(queueNames: string[]): string[];
   /**
    * @returns An array of all the queues being consumed
    * by the broker
@@ -256,8 +261,4 @@ export interface ISNSReceiveMessage {
   TopicArn: string;
   Type: string;
   UnsubscribeURL: string;
-}
-
-export interface SchemaValidator {
-  validate(message: Message): Promise<void>;
 }

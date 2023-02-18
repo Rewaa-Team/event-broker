@@ -7,6 +7,7 @@ import {
   IEmitter,
   IEmitterOptions,
   Queue,
+  Topic,
 } from "../types";
 import { Logger } from "../utils";
 import { SqnsEmitter } from "./emitter.sqns";
@@ -25,9 +26,9 @@ export class Emitter implements IEmitter {
     }
   }
 
-  async bootstrap() {
+  async bootstrap(topics?: Topic[]) {
     if (this.options.useExternalBroker) {
-      await this.emitter.bootstrap();
+      await this.emitter.bootstrap(topics);
     }
   }
   async emit(
@@ -70,9 +71,9 @@ export class Emitter implements IEmitter {
   }
   async processMessage(
     message: Message,
-    topicUrl?: string | undefined
+    topicReference?: string | undefined
   ): Promise<void> {
-    return await this.emitter.processMessage(message, topicUrl);
+    return await this.emitter.processMessage(message, topicReference);
   }
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();
@@ -80,16 +81,19 @@ export class Emitter implements IEmitter {
   getTopicReference(topicName: string, isFifo?: boolean): string {
     return this.emitter.getTopicReference(topicName, isFifo) || "";
   }
-  getConsumerReference(topicName: string, separate?: boolean, isFifo?: boolean): string {
-    return this.emitter.getConsumerReference(topicName, separate, isFifo) || "";
+  getConsumerReference(topicName: string, separateQueueName?: string, isFifo?: boolean): string {
+    return this.emitter.getConsumerReference(topicName, separateQueueName, isFifo) || "";
   }
   getInternalTopicName(topicName: string, isFifo?: boolean): string {
     return this.emitter.getInternalTopicName(topicName, isFifo);
   }
-  getInternalQueueName(topicName: string, separate?: boolean, isFifo?: boolean): string {
-    return this.getInternalQueueName(topicName, separate, isFifo);
+  getInternalQueueName(topicName: string, separateQueueName?: string, isFifo?: boolean): string {
+    return this.getInternalQueueName(topicName, separateQueueName, isFifo);
+  }
+  getConsumingQueueReferences(queueNames: string[]): string[] {
+    return this.emitter.getConsumingQueueReferences(queueNames);
   }
   getConsumingQueues(): Queue[] {
-      return this.emitter.getConsumingQueues();
+    return this.emitter.getConsumingQueues();
   }
 }
