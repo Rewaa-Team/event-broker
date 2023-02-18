@@ -11,3 +11,4 @@ export const SOURCE_QUEUE_PREFIX = 'S';
 export const CUSTOM_HANDLER_NAME = '_CUSTOM_HANDLER_';
 export const DEFAULT_QUEUE_NAME_FIFO = 'default_fifo';
 export const DEFAULT_QUEUE_NAME_STANDARD = 'default';
+export const TOPIC_SUBSCRIBE_CHUNK_SIZE = 50;

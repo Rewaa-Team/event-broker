@@ -4,12 +4,12 @@ import {
   CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
-  DEFAULT_MAX_RETRIES,
   DEFAULT_QUEUE_NAME_FIFO,
   DEFAULT_QUEUE_NAME_STANDARD,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
   SOURCE_QUEUE_PREFIX,
+  TOPIC_SUBSCRIBE_CHUNK_SIZE,
 } from "../constants";
 import { v4 } from "uuid";
 import {
@@ -75,11 +75,11 @@ export class SqnsEmitter implements IEmitter {
     }
     this.topics.set(this.options.defaultQueueOptions.fifo.name, {
       ...this.options.defaultQueueOptions.fifo,
-      isDefaultQueue: true
+      isDefaultQueue: true,
     });
     this.topics.set(this.options.defaultQueueOptions.standard.name, {
       ...this.options.defaultQueueOptions.standard,
-      isDefaultQueue: true
+      isDefaultQueue: true,
     });
   }
 
@@ -133,7 +133,11 @@ export class SqnsEmitter implements IEmitter {
       }
     });
     await Promise.all(queueCreationPromises);
-    Logger.info(`DLQs created`);
+    if (dlqs) {
+      Logger.info(`DLQs created`);
+    } else {
+      Logger.info(`Queues created`);
+    }
   }
 
   private getTopicArn(topicName: string): string {
@@ -149,24 +153,32 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async subscribeToTopics() {
-    const subscriptionPromises: Promise<SubscribeCommandOutput>[] = [];
-    this.topics.forEach((topic) => {
-      const queueArn = this.getQueueArn(this.getQueueName(topic));
-      const topicArn = this.getTopicArn(this.getTopicName(topic));
-      if (topic.isDefaultQueue) {
-        return;
-      }
-      if (!queueArn || !topicArn) {
-        Logger.warn(
-          `Skipping subscription for topic: ${topic.name}. Topic ARN: ${topicArn} Queue ARN: ${queueArn}`
-        );
-        return;
-      }
-      subscriptionPromises.push(
-        this.snsProducer.subscribeToTopic(topicArn, queueArn)
-      );
+    let subscriptionPromises: Promise<SubscribeCommandOutput>[] = [];
+    const topics = Array.from(this.topics, ([_, value]) => {
+      return value;
     });
-    await Promise.all(subscriptionPromises);
+    for (let i = 0; i < topics.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
+      const chunk = topics.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
+      for (const topic of chunk) {
+        const queueArn = this.getQueueArn(this.getQueueName(topic));
+        const topicArn = this.getTopicArn(this.getTopicName(topic));
+        if (topic.isDefaultQueue) {
+          continue;
+        }
+        if (!queueArn || !topicArn) {
+          Logger.warn(
+            `Skipping subscription for topic: ${topic.name}. Topic ARN: ${topicArn} Queue ARN: ${queueArn}`
+          );
+          continue;
+        }
+        subscriptionPromises.push(
+          this.snsProducer.subscribeToTopic(topicArn, queueArn)
+        );
+      }
+      await Promise.all(subscriptionPromises);
+      subscriptionPromises = [];
+    }
+    Logger.info(`Topic subscription complete`);
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
@@ -337,17 +349,22 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
-      if(!topic.separateQueueName && !this.options.defaultQueueOptions) {
-        throw new Error(`${topic.name} - separateQueueName is required when defaultQueueOptions are not specified.`);
+      if (!topic.separateQueueName && !this.options.defaultQueueOptions) {
+        throw new Error(
+          `${topic.name} - separateQueueName is required when defaultQueueOptions are not specified.`
+        );
       }
       const queue: Queue = {
         name:
-          topic.separateQueueName || (topic.isFifo
+          topic.separateQueueName ||
+          (topic.isFifo
             ? this.options.defaultQueueOptions?.fifo.name
-            : this.options.defaultQueueOptions?.standard.name) || '',
+            : this.options.defaultQueueOptions?.standard.name) ||
+          "",
         isFifo: !!topic.isFifo,
-        batchSize: topic.batchSize,
-        visibilityTimeout: topic.visibilityTimeout,
+        batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
+        visibilityTimeout:
+          topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
@@ -452,8 +469,8 @@ export class SqnsEmitter implements IEmitter {
     const queues: string[] = [];
     let i = 0;
     this.queues.forEach((queue) => {
-      if(queueNames[i] === queue.name) {
-        queues.push(queue.arn || '');
+      if (queueNames[i] === queue.name) {
+        queues.push(queue.arn || "");
         i++;
       }
     });

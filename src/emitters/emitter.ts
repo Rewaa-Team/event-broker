@@ -81,13 +81,24 @@ export class Emitter implements IEmitter {
   getTopicReference(topicName: string, isFifo?: boolean): string {
     return this.emitter.getTopicReference(topicName, isFifo) || "";
   }
-  getConsumerReference(topicName: string, separateQueueName?: string, isFifo?: boolean): string {
-    return this.emitter.getConsumerReference(topicName, separateQueueName, isFifo) || "";
+  getConsumerReference(
+    topicName: string,
+    separateQueueName?: string,
+    isFifo?: boolean
+  ): string {
+    return (
+      this.emitter.getConsumerReference(topicName, separateQueueName, isFifo) ||
+      ""
+    );
   }
   getInternalTopicName(topicName: string, isFifo?: boolean): string {
     return this.emitter.getInternalTopicName(topicName, isFifo);
   }
-  getInternalQueueName(topicName: string, separateQueueName?: string, isFifo?: boolean): string {
+  getInternalQueueName(
+    topicName: string,
+    separateQueueName?: string,
+    isFifo?: boolean
+  ): string {
     return this.getInternalQueueName(topicName, separateQueueName, isFifo);
   }
   getConsumingQueueReferences(queueNames: string[]): string[] {
