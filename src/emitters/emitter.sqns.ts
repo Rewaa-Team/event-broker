@@ -185,8 +185,8 @@ export class SqnsEmitter implements IEmitter {
     const qName = topic.separateQueueName
       ? topic.separateQueueName.replace(".fifo", "")
       : topic.isFifo
-      ? DEFAULT_QUEUE_NAME_FIFO
-      : DEFAULT_QUEUE_NAME_STANDARD;
+      ? this.options.defaultQueueOptions?.fifo.name
+      : this.options.defaultQueueOptions?.standard.name;
     return `${this.options.environment}_${this.options.consumerGroup}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
