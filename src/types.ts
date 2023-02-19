@@ -1,6 +1,7 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
+import { LambdaClientConfig } from '@aws-sdk/client-lambda';
 
 export interface ISQSMessage {
   data: any;
@@ -80,9 +81,26 @@ export interface Topic {
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Set if you want to use a separate queue
+   * An optional consumer group name
+   * 
+   * Set if you want to use a separate consumer group
+   * 
+   * When specified, messages emitted to this Topic will be received by 
+   * this specific consumer group only
    */
-  separateQueueName?: string;
+  separateConsumerGroup?: string;
+  /**
+   * An optional Lambda function specification
+   * 
+   * When specified, the broker will create an event source
+   * mapping for the lambda and consumer
+   */
+  lambdaHandler?: ILambdaHandler;
+}
+
+export interface ILambdaHandler {
+  functionName: string;
+  maximumConcurrency?: number;
 }
 
 export type ConsumeOptions = Omit<Topic, 'name'> & {
@@ -133,6 +151,10 @@ export interface IEmitterOptions {
    */
   snsConfig?: SQSClientConfig;
   /**
+   * Optional Lambda Client config used by message producer
+   */
+  lambdaConfig?: LambdaClientConfig;
+  /**
    * Set to true if you want to use DLQs
    * 
    * Every topic will have a DLQ created against it that
@@ -150,7 +172,7 @@ export interface IEmitterOptions {
   /**
    * Optional default queues options when consuming on a default queue
    * 
-   * When using default queues, Topics for which a separateQueueName 
+   * When using default queues, Topics for which a separateConsumerGroup 
    * is not specified are consumed from the default queues.
    */
   defaultQueueOptions?: {
@@ -209,31 +231,12 @@ export interface IEmitter {
    */
   getTopicReference(topicName: string, isFifo?: boolean): string;
   /**
-   * @param topicName Actual topic name
-   * @param separateQueueName Set to true when using a separate Queue for Topic
-   * @param isFifo Set to true if Topic is FIFO
-   */
-  getConsumerReference(topicName: string, separateQueueName?: string, isFifo?: boolean): string;
-  /**
    * 
    * @param topicName Actual topic name
    * @param isFifo Set to true if Topic is FIFO
    * @returns Name of Topic that the broker generates internally
    */
   getInternalTopicName(topicName: string, isFifo?: boolean): string;
-  /**
-   * 
-   * @param topicName Actual topic name
-   * @param separateQueueName Set when using a separate Queue for Topic
-   * @param isFifo Set to true if Topic is FIFO
-   */
-  getInternalQueueName(topicName: string, separateQueueName?: string, isFifo?: boolean): string;
-  /**
-   * 
-   * @param queueNames names of the queues for which ARN is required
-   * @returns ARNs of the specified queue names in order
-   */
-  getConsumingQueueReferences(queueNames: string[]): string[];
   /**
    * @returns An array of all the queues being consumed
    * by the broker
@@ -261,4 +264,11 @@ export interface ISNSReceiveMessage {
   TopicArn: string;
   Type: string;
   UnsubscribeURL: string;
+}
+
+export interface ICreateQueueLambdaEventSourceInput {
+  functionName: string;
+  queueARN: string;
+  maximumConcurrency?: number;
+  batchSize?: number;
 }

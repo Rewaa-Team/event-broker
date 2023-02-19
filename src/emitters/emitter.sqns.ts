@@ -4,8 +4,6 @@ import {
   CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
-  DEFAULT_QUEUE_NAME_FIFO,
-  DEFAULT_QUEUE_NAME_STANDARD,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
   SOURCE_QUEUE_PREFIX,
@@ -24,15 +22,18 @@ import {
   ConsumeOptions,
   ISNSReceiveMessage,
 } from "../types";
-import { Logger } from "../utils";
+import { Logger } from "../utils/utils";
 import { Message } from "@aws-sdk/client-sqs";
 import { SubscribeCommandOutput } from "@aws-sdk/client-sns";
+import { CreateEventSourceMappingCommandOutput } from '@aws-sdk/client-lambda';
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
+import { LambdaClient } from "../utils/lambda.client";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
   private sqsProducer!: SQSProducer;
+  private lambdaClient!: LambdaClient;
   private localEmitter!: EventEmitter;
   private options!: IEmitterOptions;
   private topicListeners: Map<string, EventListener<any>[]> = new Map();
@@ -50,6 +51,7 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter = options.localEmitter;
     this.snsProducer = new SNSProducer(this.options.snsConfig || {});
     this.sqsProducer = new SQSProducer(this.options.sqsConfig || {});
+    this.lambdaClient = new LambdaClient(this.options.lambdaConfig || {});
     this.addDefaultQueues();
   }
 
@@ -60,12 +62,28 @@ export class SqnsEmitter implements IEmitter {
       });
     }
     await this.createTopics();
-    if (this.options.deadLetterQueueEnabled) {
-      // Create DLQs first so that the TargetARN can be used in source queue
-      await this.createQueues(true);
-    }
     await this.createQueues();
     await this.subscribeToTopics();
+    await this.createEventSourceMappings();
+  }
+
+  private async createEventSourceMappings() {
+    const promises: Promise<CreateEventSourceMappingCommandOutput | void>[] = [];
+    const uniqueQueueMap: Map<string, boolean> = new Map();
+    this.topics.forEach((topic) => {
+      const queueName = this.getQueueName(topic);
+      if(topic.lambdaHandler && !uniqueQueueMap.has(queueName)) {
+        uniqueQueueMap.set(queueName, true);
+        promises.push(this.lambdaClient.createQueueMappingForLambda({
+          functionName: topic.lambdaHandler.functionName,
+          queueARN: this.getQueueArn(queueName),
+          batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
+          maximumConcurrency: topic.lambdaHandler.maximumConcurrency
+        }));
+      }
+    });
+    await Promise.all(promises);
+    Logger.info(`Event source mappings created`);
   }
 
   private addDefaultQueues() {
@@ -101,21 +119,29 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createQueue(
-    queueName: string,
-    topic: Topic,
-    isDLQ: boolean = false
+    topic: Topic
   ) {
+    if(this.options.deadLetterQueueEnabled && topic.deadLetterQueueEnabled !== false) {
+      const queueName = this.getQueueName(topic, true);
+      await this.sqsProducer.createQueueFromTopic({
+        queueName,
+        topic,
+        isDLQ: true,
+        queueArn: this.getQueueArn(this.getQueueName(topic)),
+        dlqArn: this.getQueueArn(this.getQueueName(topic, true)),
+      });
+    }
+    const queueName = this.getQueueName(topic);
     await this.sqsProducer.createQueueFromTopic({
       queueName,
       topic,
-      isDLQ,
-      globalDLQEnabled: !!this.options.deadLetterQueueEnabled,
+      isDLQ: false,
       queueArn: this.getQueueArn(this.getQueueName(topic)),
       dlqArn: this.getQueueArn(this.getQueueName(topic, true)),
     });
   }
 
-  private async createQueues(dlqs: boolean = false) {
+  private async createQueues() {
     const uniqueQueueMap: Map<string, boolean> = new Map();
     const queueCreationPromises: Promise<void>[] = [];
     this.topics.forEach((topic) => {
@@ -124,20 +150,10 @@ export class SqnsEmitter implements IEmitter {
         return;
       }
       uniqueQueueMap.set(queueName, true);
-      if (dlqs && topic.deadLetterQueueEnabled !== false) {
-        queueCreationPromises.push(
-          this.createQueue(this.getQueueName(topic, true), topic, true)
-        );
-      } else if (!dlqs) {
-        queueCreationPromises.push(this.createQueue(queueName, topic));
-      }
+      queueCreationPromises.push(this.createQueue(topic));
     });
     await Promise.all(queueCreationPromises);
-    if (dlqs) {
-      Logger.info(`DLQs created`);
-    } else {
-      Logger.info(`Queues created`);
-    }
+    Logger.info(`Queues created`);
   }
 
   private getTopicArn(topicName: string): string {
@@ -182,8 +198,8 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
-    const qName = topic.separateQueueName
-      ? topic.separateQueueName.replace(".fifo", "")
+    const qName = topic.separateConsumerGroup
+      ? topic.separateConsumerGroup.replace(".fifo", "")
       : topic.isFifo
       ? this.options.defaultQueueOptions?.fifo.name
       : this.options.defaultQueueOptions?.standard.name;
@@ -349,14 +365,14 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
-      if (!topic.separateQueueName && !this.options.defaultQueueOptions) {
+      if (!topic.separateConsumerGroup && !this.options.defaultQueueOptions) {
         throw new Error(
-          `${topic.name} - separateQueueName is required when defaultQueueOptions are not specified.`
+          `${topic.name} - separateConsumerGroup is required when defaultQueueOptions are not specified.`
         );
       }
       const queue: Queue = {
         name:
-          topic.separateQueueName ||
+          topic.separateConsumerGroup ||
           (topic.isFifo
             ? this.options.defaultQueueOptions?.fifo.name
             : this.options.defaultQueueOptions?.standard.name) ||
@@ -431,50 +447,12 @@ export class SqnsEmitter implements IEmitter {
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
 
-  getConsumerReference(
-    topicName: string,
-    separateQueueName?: string,
-    isFifo?: boolean
-  ): string {
-    const topic: Topic = {
-      name: topicName,
-      isFifo: isFifo,
-      separateQueueName: separateQueueName,
-    };
-    return this.getQueueArn(this.getQueueName(topic)) || "";
-  }
-
   getInternalTopicName(topicName: string, isFifo?: boolean): string {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
     };
     return this.getTopicName(topic) || "";
-  }
-
-  getInternalQueueName(
-    topicName: string,
-    separateQueueName?: string,
-    isFifo?: boolean
-  ): string {
-    const topic: Topic = {
-      name: topicName,
-      isFifo: isFifo,
-      separateQueueName: separateQueueName,
-    };
-    return this.getQueueName(topic) || "";
-  }
-
-  getConsumingQueueReferences(queueNames: string[]): string[] {
-    const queues: string[] = [];
-    let i = 0;
-    this.queues.forEach((queue) => {
-      if (queueNames[i] === queue.name) {
-        queues.push(queue.arn || "");
-        i++;
-      }
-    });
-    return queues;
   }
 
   getConsumingQueues(): Queue[] {

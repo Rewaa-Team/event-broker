@@ -9,7 +9,7 @@ import {
   Queue,
   Topic,
 } from "../types";
-import { Logger } from "../utils";
+import { Logger } from "../utils/utils";
 import { SqnsEmitter } from "./emitter.sqns";
 
 export class Emitter implements IEmitter {
@@ -81,28 +81,8 @@ export class Emitter implements IEmitter {
   getTopicReference(topicName: string, isFifo?: boolean): string {
     return this.emitter.getTopicReference(topicName, isFifo) || "";
   }
-  getConsumerReference(
-    topicName: string,
-    separateQueueName?: string,
-    isFifo?: boolean
-  ): string {
-    return (
-      this.emitter.getConsumerReference(topicName, separateQueueName, isFifo) ||
-      ""
-    );
-  }
   getInternalTopicName(topicName: string, isFifo?: boolean): string {
     return this.emitter.getInternalTopicName(topicName, isFifo);
-  }
-  getInternalQueueName(
-    topicName: string,
-    separateQueueName?: string,
-    isFifo?: boolean
-  ): string {
-    return this.getInternalQueueName(topicName, separateQueueName, isFifo);
-  }
-  getConsumingQueueReferences(queueNames: string[]): string[] {
-    return this.emitter.getConsumingQueueReferences(queueNames);
   }
   getConsumingQueues(): Queue[] {
     return this.emitter.getConsumingQueues();

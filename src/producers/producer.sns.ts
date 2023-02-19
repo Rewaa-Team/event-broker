@@ -10,7 +10,7 @@ import {
 import {
     ISNSMessage,
 } from "../types";
-import { Logger } from "../utils";
+import { Logger } from "../utils/utils";
 import { v4 } from "uuid";
 
 export class SNSProducer {

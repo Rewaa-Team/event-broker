@@ -8,7 +8,7 @@ import {
   GetQueueAttributesRequest,
 } from "@aws-sdk/client-sqs";
 import { ISQSMessage, ISQSMessageOptions, Queue, Topic } from "../types";
-import { Logger } from "../utils";
+import { Logger } from "../utils/utils";
 import { v4 } from "uuid";
 import {
   DEFAULT_MESSAGE_DELAY,
@@ -78,11 +78,10 @@ export class SQSProducer {
     queueName: string;
     topic: Topic;
     isDLQ: boolean;
-    globalDLQEnabled: boolean;
     queueArn: string;
     dlqArn?: string;
   }) {
-    const { queueName, topic, isDLQ, globalDLQEnabled, queueArn, dlqArn } = params;
+    const { queueName, topic, isDLQ, queueArn, dlqArn } = params;
     let queueAttributes: Record<string, string> = {
       DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
@@ -103,7 +102,7 @@ export class SQSProducer {
         ],
       })
     };
-    if (!isDLQ && globalDLQEnabled && topic.deadLetterQueueEnabled !== false) {
+    if (!isDLQ && topic.deadLetterQueueEnabled !== false) {
       queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":\"${
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
