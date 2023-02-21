@@ -58,7 +58,7 @@ export class SqnsEmitter implements IEmitter {
   async bootstrap(topics?: Topic[]) {
     if (topics?.length) {
       topics.forEach((topic) => {
-        this.on(topic.name, async () => {}, ...(topic as any));
+        this.on(topic.name, async () => {}, topic);
       });
     }
     await this.createTopics();
@@ -257,7 +257,7 @@ export class SqnsEmitter implements IEmitter {
       return;
     }
     this.queues.forEach((queue) => {
-      if (!queue || queue.isDLQ) {
+      if (!queue || queue.isDLQ || queue.listenerIsLambda) {
         return;
       }
       this.startConsumer(queue);
@@ -358,7 +358,7 @@ export class SqnsEmitter implements IEmitter {
     let listeners = this.topicListeners.get(eventName) || [];
     listeners.push(listener);
     this.topicListeners.set(eventName, listeners);
-    const topic = {
+    const topic: Topic = {
       ...options,
       name: eventName,
     };
@@ -384,6 +384,7 @@ export class SqnsEmitter implements IEmitter {
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
+        listenerIsLambda: !!topic.lambdaHandler
       };
       this.queues.set(queueName, queue);
     }

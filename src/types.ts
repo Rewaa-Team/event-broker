@@ -44,6 +44,7 @@ export interface Queue {
   isDLQ?: boolean;
   visibilityTimeout?: number;
   batchSize?: number;
+  listenerIsLambda?: boolean;
 }
 
 export interface Topic {
@@ -103,7 +104,7 @@ export interface ILambdaHandler {
   maximumConcurrency?: number;
 }
 
-export type ConsumeOptions = Omit<Topic, 'name'> & {
+export type ConsumeOptions = Omit<Topic, 'name' | 'lambdaHandler'> & {
   useLocal?: boolean;
 };
 
@@ -192,7 +193,7 @@ export interface IEmitterOptions {
   log?: boolean;
 }
 
-export type DefaultQueueOptions = Omit<Topic, 'separate'>;
+export type DefaultQueueOptions = Omit<Topic, 'separateConsumerGroup'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 

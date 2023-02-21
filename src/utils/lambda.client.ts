@@ -2,6 +2,8 @@ import {
   CreateEventSourceMappingCommandInput,
   CreateEventSourceMappingCommandOutput,
   ListEventSourceMappingsCommandInput,
+  UpdateEventSourceMappingCommandInput,
+  UpdateEventSourceMappingCommandOutput,
   Lambda,
   LambdaClientConfig,
 } from "@aws-sdk/client-lambda";
@@ -32,16 +34,28 @@ export class LambdaClient {
       const { EventSourceMappings } = await this.getEventSourceMapping(
         input.queueARN
       );
-      let functionName: string;
+      let functionName: string | undefined;
       if (EventSourceMappings?.length) {
         functionName = (EventSourceMappings[0].FunctionArn || "").split(
           "function:"
         )[1];
-        if(functionName && functionName !== input.functionName) {
-            throw new Error(
-                `Lambda Function ${functionName} is already listening for Queue ${input.queueARN}`
-            );
-        } 
+        if (functionName && functionName !== input.functionName) {
+          throw new Error(
+            `Lambda Function ${functionName} is already listening for Queue ${input.queueARN}`
+          );
+        }
+      }
+      if (functionName === input.functionName) {
+        if (
+          EventSourceMappings?.[0].ScalingConfig?.MaximumConcurrency !==
+          input.maximumConcurrency
+        ) {
+          return await this.updateQueueMappingForLambda(
+            EventSourceMappings?.[0].UUID!,
+            input
+          );
+        }
+        return;
       }
       return await this.client.createEventSourceMapping(params);
     } catch (error: any) {
@@ -60,9 +74,22 @@ export class LambdaClient {
     }
   };
 
+  updateQueueMappingForLambda = async (
+    uuid: string,
+    input: ICreateQueueLambdaEventSourceInput
+  ) => {
+    const params: UpdateEventSourceMappingCommandInput = {
+      UUID: uuid,
+      ScalingConfig: {
+        MaximumConcurrency: input.maximumConcurrency,
+      },
+    };
+    return await this.client.updateEventSourceMapping(params);
+  };
+
   getEventSourceMapping = async (queueARN: string) => {
     const params: ListEventSourceMappingsCommandInput = {
-      EventSourceArn: queueARN
+      EventSourceArn: queueARN,
     };
     try {
       return await this.client.listEventSourceMappings(params);
