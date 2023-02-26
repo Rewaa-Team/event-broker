@@ -1,12 +1,4 @@
-import {
-    SNS,
-    SNSClientConfig,
-    PublishCommandInput,
-    PublishCommandOutput,
-    CreateTopicCommandInput,
-    SubscribeCommandInput,
-    SubscribeCommandOutput
-} from "@aws-sdk/client-sns";
+import { SNS } from "aws-sdk";
 import {
     ISNSMessage,
 } from "../types";
@@ -15,7 +7,7 @@ import { v4 } from "uuid";
 
 export class SNSProducer {
     private readonly sns: SNS;
-    constructor(config: SNSClientConfig) {
+    constructor(config: SNS.ClientConfiguration) {
         this.sns = new SNS(config);
     }
 
@@ -26,8 +18,8 @@ export class SNSProducer {
     send = async (
         topicArn: string,
         message: ISNSMessage
-    ): Promise<PublishCommandOutput> => {
-        const params: PublishCommandInput = {
+    ): Promise<SNS.PublishResponse> => {
+        const params: SNS.PublishInput = {
             Message: JSON.stringify(message),
             TargetArn: topicArn
         };
@@ -37,14 +29,14 @@ export class SNSProducer {
             params.MessageGroupId = message.messageGroupId;
         }
 
-        return await this.sns.publish(params);
+        return await this.sns.publish(params).promise();
     };
 
     createTopic = async (
         topicName: string,
         attributes: Record<string, string>
     ): Promise<string | undefined> => {
-        const params: CreateTopicCommandInput = {
+        const params: SNS.CreateTopicInput = {
             Name: topicName,
             Attributes: attributes,
         };
@@ -54,7 +46,7 @@ export class SNSProducer {
         }
 
         try {
-            const { TopicArn } = await this.sns.createTopic(params);
+            const { TopicArn } = await this.sns.createTopic(params).promise();
             return TopicArn;
         } catch (error) {
             Logger.error(`Topic creation failed: ${topicName}`);
@@ -62,14 +54,14 @@ export class SNSProducer {
         }
     };
 
-    subscribeToTopic = async (topicArn: string, queueArn: string): Promise<SubscribeCommandOutput> => {
-        const params: SubscribeCommandInput = {
+    subscribeToTopic = async (topicArn: string, queueArn: string): Promise<SNS.SubscribeResponse> => {
+        const params: SNS.SubscribeInput = {
             TopicArn: topicArn,
             Protocol: 'sqs',
             Endpoint: queueArn
         }
         try {
-            return await this.sns.subscribe(params);
+            return await this.sns.subscribe(params).promise();
         } catch (error) {
             Logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
             throw error;

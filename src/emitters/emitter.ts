@@ -1,4 +1,4 @@
-import { Message } from "@aws-sdk/client-sqs";
+import { SQS } from "aws-sdk";
 import { EventEmitter } from "events";
 import {
   ConsumeOptions,
@@ -70,7 +70,7 @@ export class Emitter implements IEmitter {
     this.localEmitter.removeAllListeners();
   }
   async processMessage(
-    message: Message,
+    message: SQS.Message,
     topicReference?: string | undefined
   ): Promise<void> {
     return await this.emitter.processMessage(message, topicReference);

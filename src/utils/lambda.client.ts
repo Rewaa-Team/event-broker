@@ -1,18 +1,10 @@
-import {
-  CreateEventSourceMappingCommandInput,
-  CreateEventSourceMappingCommandOutput,
-  ListEventSourceMappingsCommandInput,
-  UpdateEventSourceMappingCommandInput,
-  UpdateEventSourceMappingCommandOutput,
-  Lambda,
-  LambdaClientConfig,
-} from "@aws-sdk/client-lambda";
+import { Lambda } from "aws-sdk";
 import { ICreateQueueLambdaEventSourceInput } from "../types";
 import { Logger } from "./utils";
 
 export class LambdaClient {
   private readonly lambda: Lambda;
-  constructor(config: LambdaClientConfig) {
+  constructor(config: Lambda.ClientConfiguration) {
     this.lambda = new Lambda(config);
   }
 
@@ -21,13 +13,10 @@ export class LambdaClient {
   }
   createQueueMappingForLambda = async (
     input: ICreateQueueLambdaEventSourceInput
-  ): Promise<CreateEventSourceMappingCommandOutput | void> => {
-    const params: CreateEventSourceMappingCommandInput = {
+  ): Promise<Lambda.EventSourceMappingConfiguration | void> => {
+    const params: Lambda.CreateEventSourceMappingRequest = {
       EventSourceArn: input.queueARN,
       FunctionName: input.functionName,
-      ScalingConfig: {
-        MaximumConcurrency: input.maximumConcurrency,
-      },
       BatchSize: input.batchSize,
     };
     try {
@@ -46,18 +35,9 @@ export class LambdaClient {
         }
       }
       if (functionName === input.functionName) {
-        if (
-          EventSourceMappings?.[0].ScalingConfig?.MaximumConcurrency !==
-          input.maximumConcurrency
-        ) {
-          return await this.updateQueueMappingForLambda(
-            EventSourceMappings?.[0].UUID!,
-            input
-          );
-        }
         return;
       }
-      return await this.client.createEventSourceMapping(params);
+      return await this.client.createEventSourceMapping(params).promise();
     } catch (error: any) {
       Logger.error(
         `Event Source Mapping Creation failed: Function: ${
@@ -74,25 +54,12 @@ export class LambdaClient {
     }
   };
 
-  updateQueueMappingForLambda = async (
-    uuid: string,
-    input: ICreateQueueLambdaEventSourceInput
-  ) => {
-    const params: UpdateEventSourceMappingCommandInput = {
-      UUID: uuid,
-      ScalingConfig: {
-        MaximumConcurrency: input.maximumConcurrency,
-      },
-    };
-    return await this.client.updateEventSourceMapping(params);
-  };
-
   getEventSourceMapping = async (queueARN: string) => {
-    const params: ListEventSourceMappingsCommandInput = {
+    const params: Lambda.ListEventSourceMappingsRequest = {
       EventSourceArn: queueARN,
     };
     try {
-      return await this.client.listEventSourceMappings(params);
+      return await this.client.listEventSourceMappings(params).promise();
     } catch (error) {
       Logger.error(
         `Failed to list Event Source Mapping for Queue: ${queueARN}`

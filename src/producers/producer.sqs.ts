@@ -1,12 +1,4 @@
-import {
-  CreateQueueRequest,
-  SendMessageCommandOutput,
-  SendMessageRequest,
-  SQS,
-  DeleteQueueCommandInput,
-  SQSClientConfig,
-  GetQueueAttributesRequest,
-} from "@aws-sdk/client-sqs";
+import { SQS } from "aws-sdk";
 import { ISQSMessage, ISQSMessageOptions, Queue, Topic } from "../types";
 import { Logger } from "../utils/utils";
 import { v4 } from "uuid";
@@ -19,7 +11,7 @@ import {
 
 export class SQSProducer {
   private readonly sqs: SQS;
-  constructor(config: SQSClientConfig) {
+  constructor(config: SQS.ClientConfiguration) {
     this.sqs = new SQS(config);
   }
 
@@ -31,8 +23,8 @@ export class SQSProducer {
     queueUrl: string,
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
-  ): Promise<SendMessageCommandOutput> => {
-    const params: SendMessageRequest = {
+  ): Promise<SQS.SendMessageResult> => {
+    const params: SQS.SendMessageRequest = {
       MessageBody: JSON.stringify(message),
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
@@ -49,7 +41,7 @@ export class SQSProducer {
       params.MessageGroupId = message.messageGroupId;
     }
 
-    return await this.sqs.sendMessage(params);
+    return await this.sqs.sendMessage(params).promise();
   };
 
   createQueue = async (
@@ -60,13 +52,13 @@ export class SQSProducer {
     if (this.isFifoQueue(queueName)) {
       attributes.FifoQueue = "true";
     }
-    const params: CreateQueueRequest = {
+    const params: SQS.CreateQueueRequest = {
       QueueName: queueName,
       Attributes: attributes,
     };
 
     try {
-      const { QueueUrl } = await this.sqs.createQueue(params);
+      const { QueueUrl } = await this.sqs.createQueue(params).promise();
       return QueueUrl;
     } catch (error) {
       Logger.error(`Queue creation failed: ${queueName}`);
@@ -114,12 +106,12 @@ export class SQSProducer {
     queueUrl: string,
     attributes: string[]
   ): Promise<Record<string, string> | undefined> => {
-    const params: GetQueueAttributesRequest = {
+    const params: SQS.GetQueueAttributesRequest = {
       QueueUrl: queueUrl,
       AttributeNames: attributes,
     };
     try {
-      const { Attributes } = await this.sqs.getQueueAttributes(params);
+      const { Attributes } = await this.sqs.getQueueAttributes(params).promise();
       return Attributes;
     } catch (error) {
       Logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
@@ -128,11 +120,11 @@ export class SQSProducer {
   };
 
   deleteQueue = async (queueUrl: string): Promise<boolean> => {
-    const params: DeleteQueueCommandInput = {
+    const params: SQS.DeleteQueueRequest = {
       QueueUrl: queueUrl,
     };
     try {
-      await this.sqs.deleteQueue(params);
+      await this.sqs.deleteQueue(params).promise();
       return true;
     } catch (error) {
       Logger.error(`Queue deletion failed: ${queueUrl}`);

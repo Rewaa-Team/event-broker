@@ -1,7 +1,6 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
-import { LambdaClientConfig } from '@aws-sdk/client-lambda';
+import { SQS, SNS, Lambda } from "aws-sdk";
 
 export interface ISQSMessage {
   data: any;
@@ -146,15 +145,15 @@ export interface IEmitterOptions {
   /**
    * Optional SQS Client config used by message producer
    */
-  sqsConfig?: SQSClientConfig;
+  sqsConfig?: SQS.ClientConfiguration;
   /**
    * Optional SNS Client config used by message producer
    */
-  snsConfig?: SQSClientConfig;
+  snsConfig?: SNS.ClientConfiguration;
   /**
    * Optional Lambda Client config used by message producer
    */
-  lambdaConfig?: LambdaClientConfig;
+  lambdaConfig?: Lambda.ClientConfiguration;
   /**
    * Set to true if you want to use DLQs
    * 
@@ -223,7 +222,7 @@ export interface IEmitter {
    * @param topicReference Optional topic reference for logging purposes
    */
   processMessage(
-    message: Message,
+    message: SQS.Message,
     topicReference?: string | undefined
   ): Promise<void>;
   /**

@@ -24,8 +24,8 @@ import {
 } from "../types";
 import { Logger } from "../utils/utils";
 import { Message } from "@aws-sdk/client-sqs";
-import { SubscribeCommandOutput } from "@aws-sdk/client-sns";
-import { CreateEventSourceMappingCommandOutput } from '@aws-sdk/client-lambda';
+import { SNS, SQS } from "aws-sdk";
+import { Lambda } from "aws-sdk";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
@@ -49,9 +49,15 @@ export class SqnsEmitter implements IEmitter {
       );
     }
     this.localEmitter = options.localEmitter;
-    this.snsProducer = new SNSProducer(this.options.snsConfig || {});
-    this.sqsProducer = new SQSProducer(this.options.sqsConfig || {});
-    this.lambdaClient = new LambdaClient(this.options.lambdaConfig || {});
+    this.snsProducer = new SNSProducer(
+      this.options.snsConfig || { ...this.options.awsConfig }
+    );
+    this.sqsProducer = new SQSProducer(
+      this.options.sqsConfig || { ...this.options.awsConfig }
+    );
+    this.lambdaClient = new LambdaClient(
+      this.options.lambdaConfig || { ...this.options.awsConfig }
+    );
     this.addDefaultQueues();
   }
 
@@ -68,18 +74,21 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createEventSourceMappings() {
-    const promises: Promise<CreateEventSourceMappingCommandOutput | void>[] = [];
+    const promises: Promise<Lambda.EventSourceMappingConfiguration | void>[] =
+      [];
     const uniqueQueueMap: Map<string, boolean> = new Map();
     this.topics.forEach((topic) => {
       const queueName = this.getQueueName(topic);
-      if(topic.lambdaHandler && !uniqueQueueMap.has(queueName)) {
+      if (topic.lambdaHandler && !uniqueQueueMap.has(queueName)) {
         uniqueQueueMap.set(queueName, true);
-        promises.push(this.lambdaClient.createQueueMappingForLambda({
-          functionName: topic.lambdaHandler.functionName,
-          queueARN: this.getQueueArn(queueName),
-          batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
-          maximumConcurrency: topic.lambdaHandler.maximumConcurrency
-        }));
+        promises.push(
+          this.lambdaClient.createQueueMappingForLambda({
+            functionName: topic.lambdaHandler.functionName,
+            queueARN: this.getQueueArn(queueName),
+            batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
+            maximumConcurrency: topic.lambdaHandler.maximumConcurrency,
+          })
+        );
       }
     });
     await Promise.all(promises);
@@ -118,10 +127,11 @@ export class SqnsEmitter implements IEmitter {
     Logger.info(`Topics created`);
   }
 
-  private async createQueue(
-    topic: Topic
-  ) {
-    if(this.options.deadLetterQueueEnabled && topic.deadLetterQueueEnabled !== false) {
+  private async createQueue(topic: Topic) {
+    if (
+      this.options.deadLetterQueueEnabled &&
+      topic.deadLetterQueueEnabled !== false
+    ) {
       const queueName = this.getQueueName(topic, true);
       await this.sqsProducer.createQueueFromTopic({
         queueName,
@@ -169,7 +179,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async subscribeToTopics() {
-    let subscriptionPromises: Promise<SubscribeCommandOutput>[] = [];
+    let subscriptionPromises: Promise<SNS.SubscribeResponse>[] = [];
     const topics = Array.from(this.topics, ([_, value]) => {
       return value;
     });
@@ -271,7 +281,7 @@ export class SqnsEmitter implements IEmitter {
       return;
     }
     queue.consumer = Consumer.create({
-      sqs: this.sqsProducer.client,
+      region: this.options.awsConfig?.region,
       queueUrl: queue.url,
       handleMessage: async (message) => {
         await this.handleMessageReceipt(message as Message, queue.url!);
@@ -384,7 +394,7 @@ export class SqnsEmitter implements IEmitter {
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
-        listenerIsLambda: !!topic.lambdaHandler
+        listenerIsLambda: !!topic.lambdaHandler,
       };
       this.queues.set(queueName, queue);
     }
@@ -431,7 +441,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async processMessage(
-    message: Message,
+    message: SQS.Message,
     topicReference?: string | undefined
   ): Promise<void> {
     return await this.handleMessageReceipt(
