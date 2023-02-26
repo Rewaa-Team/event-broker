@@ -1,6 +1,6 @@
 {
   "name": "@Rewaa-Team/event-broker",
-  "version": "2.0.3",
+  "version": "3.0.0",
   "description": "A broker for all the events that Rewaa will ever produce or consume",
   "main": "dist/index.js",
   "scripts": {
@@ -25,13 +25,14 @@
   },
   "homepage": "https://github.com/Rewaa-Team/event-broker#readme",
   "dependencies": {
-    "@aws-sdk/client-kinesis": "^3.264.0",
-    "@aws-sdk/client-sqs": "^3.245.0",
-    "@types/node": "^18.11.18",
     "sqs-consumer": "^6.1.0"
   },
   "devDependencies": {
     "@types/uuid": "^9.0.0",
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.4",
+    "@types/node": "^18.11.18"
+  },
+  "peerDependencies": {
+    "aws-sdk": "2.1055.0"
   }
 }

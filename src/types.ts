@@ -1,12 +1,6 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { Message, SQSClientConfig } from "@aws-sdk/client-sqs";
-import { KinesisClientConfig, _Record } from "@aws-sdk/client-kinesis";
-
-export enum ExchangeType {
-  Direct = "Direct",
-  Fanout = "Fanout",
-}
+import { SQS, SNS, Lambda } from "aws-sdk";
 
 export interface ISQSMessage {
   data: any;
@@ -18,28 +12,19 @@ export interface ISQSMessageOptions {
   delay: number;
 }
 
-export interface ISQSQueueCreateOptions {
-  delay: string;
-  messageRetentionPeriod: string;
-}
-
 export interface IEmitOptions {
   /**
-   * use with FIFO Topic/Queue to ensure the ordering of events
-   * For SQS client, refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
+   * Set to true when emitting to fifo topic
+   * 
+   * Default is false
+   */
+  isFifo?: boolean;
+  /**
+   * Use with FIFO Topic/Queue to ensure the ordering of events
+   * 
+   * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
-  /**
-   * Delay message for a specific time before which they can be
-   * processed. Specify in seconds.
-   * Max value is 900
-   */
-  delay?: number;
-  /**
-   * Set to true if using local emitter to emit on the
-   * local node emitter
-   */
-  useLocalEmitter?: boolean;
 }
 
 export interface IFailedEventMessage {
@@ -50,14 +35,15 @@ export interface IFailedEventMessage {
 }
 
 export interface Queue {
+  name: string;
   isFifo: boolean;
-  isConsuming: boolean;
   consumer?: Consumer;
   url?: string;
   arn?: string;
   isDLQ?: boolean;
   visibilityTimeout?: number;
   batchSize?: number;
+  listenerIsLambda?: boolean;
 }
 
 export interface Topic {
@@ -65,20 +51,13 @@ export interface Topic {
   /**
    * Set to true if topic is FIFO, default is false
    */
-  isFifo: boolean;
-  /**
-   * Set to true if you are consuming this topic
-   */
-  isConsuming: boolean;
-  /**
-   * Optional prefix to differentiate topics from other
-   * services using same topic name
-   */
-  servicePrefix?: string;
+  isFifo?: boolean;
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
+   * 
    * Unit: s
+   * 
    * Default: 360s
    */
   visibilityTimeout?: number;
@@ -90,53 +69,54 @@ export interface Topic {
    * Maximum number the broker will attempt to retry the message
    * before which it is added to the related DLQ if deadLetterQueueEnabled
    * is true in emitter options
+   * 
    * Default: 3
    */
   maxRetryCount?: number;
 
   /**
    * Topic level DLQ specification
+   * 
    * By default, the value will be whatever is in IEmitterOptions
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * The type of exchange for this topic
-   * Direct exchange type uses SQS
-   * Fanout exchange type uses Kinesis
+   * An optional consumer group name
+   * 
+   * Set if you want to use a separate consumer group
+   * 
+   * When specified, messages emitted to this Topic will be received by 
+   * this specific consumer group only
    */
-  exchangeType: ExchangeType;
-}
-
-export interface IEventTopicMap {
+  separateConsumerGroup?: string;
   /**
-   * Map events to topics.
-   * Multiple events maybe mapped to the same topic
+   * An optional Lambda function specification
+   * 
+   * When specified, the broker will create an event source
+   * mapping for the lambda and consumer
    */
-  [eventName: string]: Topic;
+  lambdaHandler?: ILambdaHandler;
 }
 
-export enum EmitterType {
-  SQS = "SQS",
-  KINESIS = "KINESIS",
+export interface ILambdaHandler {
+  functionName: string;
+  maximumConcurrency?: number;
 }
+
+export type ConsumeOptions = Omit<Topic, 'name' | 'lambdaHandler'> & {
+  useLocal?: boolean;
+};
 
 export interface IEmitterOptions {
   /**
-   * Set to true if you are consuming any topic
-   */
-  isConsumer?: boolean;
-  /**
-   * Map of events to topics
-   */
-  eventTopicMap: IEventTopicMap;
-  /**
-   * Set to true if using external broker as client like SQS
+   * Set to true if using external broker as client
    */
   useExternalBroker?: boolean;
-  emitterType: EmitterType;
   /**
    * Optional, to log slow messages
+   * 
    * Unit: ms
+   * 
    * Default: 60000ms
    */
   maxProcessingTime?: number;
@@ -149,50 +129,80 @@ export interface IEmitterOptions {
    */
   localEmitter: EventEmitter;
   /**
-   * An optional event on which failed events will be emitted.
-   * These include failures when sending and consuming messages.
+   * An optional event on which failed events will be emitted
+   * 
+   * These include failures when sending and consuming messages
    */
   eventOnFailure?: string;
   /**
    * Maximum number of times the broker will retry the message
    * in case of failure in consumption after which it will be
    * moved to a DLQ if deadLetterQueueEnabled is true
+   * 
    * Default: 3
    */
   maxRetries?: number;
   /**
    * Optional SQS Client config used by message producer
    */
-  sqsConfig?: SQSClientConfig;
+  sqsConfig?: SQS.ClientConfiguration;
   /**
-   * Optional Kinesis Client config used by message producer
+   * Optional SNS Client config used by message producer
    */
-  kinesisConfig?: KinesisClientConfig;
+  snsConfig?: SNS.ClientConfiguration;
+  /**
+   * Optional Lambda Client config used by message producer
+   */
+  lambdaConfig?: Lambda.ClientConfiguration;
   /**
    * Set to true if you want to use DLQs
+   * 
    * Every topic will have a DLQ created against it that
    * will be used when maxRetryCount is exceeded for a topic
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Used as prefix for the any temporary files created
+   * Used as prefix for internal queues
    */
-  serviceName?: string;
+  consumerGroup: string;
   /**
    * Use this to force load topics from external clients
    */
   refreshTopicsCache?: boolean;
+  /**
+   * Optional default queues options when consuming on a default queue
+   * 
+   * When using default queues, Topics for which a separateConsumerGroup 
+   * is not specified are consumed from the default queues.
+   */
+  defaultQueueOptions?: {
+    fifo: DefaultQueueOptions,
+    standard: DefaultQueueOptions
+  };
+  /**
+   * Optional AWS Config used by the emitter when useExternalBroker is true
+   */
+  awsConfig?: {
+    region: string;
+    accountId: string;
+  }
+  /**
+   * Set to true to enable logging
+   */
+  log?: boolean;
 }
+
+export type DefaultQueueOptions = Omit<Topic, 'separateConsumerGroup'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
-export type ClientMessage = {
-  [ExchangeType.Direct]: Message;
-  [ExchangeType.Fanout]: _Record;
-};
-
 export interface IEmitter {
-  initialize(options: IEmitterOptions): Promise<void>;
+  /**
+   * Call for creation of topics and queues
+   * @param topics An optional array of topics.
+   * Only required if Emitter.on is not used
+   */
+  bootstrap(topics?: Topic[]): Promise<void>;
   emit(
     eventName: string,
     options?: IEmitOptions,
@@ -201,34 +211,64 @@ export interface IEmitter {
   on<T>(
     eventName: string,
     listener: EventListener<T>,
-    useLocal?: boolean
+    options?: ConsumeOptions,
   ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
-   * @param exchangeType The type of exchange
-   * @param message The message received from queue/topic
-   * Can be of type corresponding to ClientMessage
-   * @param topicUrl Optional queue/topic reference for logging purposes
+   * @param message The message received from topic
+   * @param topicReference Optional topic reference for logging purposes
    */
-  processMessage<T extends ExchangeType>(
-    exchangeType: T,
-    message: ClientMessage[T],
-    topicUrl?: string | undefined
+  processMessage(
+    message: SQS.Message,
+    topicReference?: string | undefined
   ): Promise<void>;
   /**
-   *
-   * @param topic The topic object
-   * @returns Reference to the topic. In case of SQS, this is
-   * the queue arn.
+   * @param topicName Actual topic name
+   * @param isFifo Set to true if Topic is FIFO
    */
-  getTopicReference(topic: Topic): string;
+  getTopicReference(topicName: string, isFifo?: boolean): string;
+  /**
+   * 
+   * @param topicName Actual topic name
+   * @param isFifo Set to true if Topic is FIFO
+   * @returns Name of Topic that the broker generates internally
+   */
+  getInternalTopicName(topicName: string, isFifo?: boolean): string;
+  /**
+   * @returns An array of all the queues being consumed
+   * by the broker
+   */
+  getConsumingQueues(): Queue[];
+  /**
+   * Start consuming the topics
+   */
+  startConsumers(): Promise<void>;
 }
 
-export interface IKinesisMessage {
+export interface ISNSMessage {
   data: any;
   eventName: string;
-  partitionKey: string;
+  messageGroupId?: string;
+}
+
+export interface ISNSReceiveMessage {
+  Message: string;
+  MessageId: string;
+  Signature: string;
+  SignatureVersion: string;
+  SigningCertURL: string;
+  Timestamp: string;
+  TopicArn: string;
+  Type: string;
+  UnsubscribeURL: string;
+}
+
+export interface ICreateQueueLambdaEventSourceInput {
+  functionName: string;
+  queueARN: string;
+  maximumConcurrency?: number;
+  batchSize?: number;
 }
