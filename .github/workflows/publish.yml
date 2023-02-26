@@ -13,6 +13,8 @@ jobs:
         with:
           node-version: '14.x'
           registry-url: 'https://npm.pkg.github.com'
+      - name: npm 7
+        run: npm i -g npm@7 --registry=https://registry.npmjs.org
       - name: Install Dependencies, Build and Publish package on NPM 📦
         run: npm ci && npm publish
         env:
