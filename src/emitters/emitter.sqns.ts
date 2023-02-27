@@ -218,11 +218,20 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
-    const qName = topic.separateConsumerGroup
-      ? topic.separateConsumerGroup.replace(".fifo", "")
-      : topic.isFifo
-      ? this.options.defaultQueueOptions?.fifo.name
-      : this.options.defaultQueueOptions?.standard.name;
+    let qName: string = "";
+    if (topic.separateConsumerGroup) {
+      qName = topic.separateConsumerGroup;
+    } else {
+      if (topic.isFifo) {
+        qName = this.options.defaultQueueOptions?.fifo.name || "";
+      } else {
+        qName = this.options.defaultQueueOptions?.standard.name || "";
+      }
+    }
+    if (topic.exchangeType === ExchangeType.Queue) {
+      qName = topic.name;
+    }
+    qName = qName.replace(".fifo", "");
     return `${this.options.environment}_${this.options.consumerGroup}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;

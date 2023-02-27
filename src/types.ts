@@ -118,6 +118,8 @@ export interface Topic {
    *
    * For Fanout, message is sent from Topic to queues.
    * This means that the quotas for SNS apply here for throttling
+   * 
+   * Queue exchange type is always consumed via a separate consumer group (queue)
    */
   exchangeType: ExchangeType;
 }
