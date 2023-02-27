@@ -15,29 +15,29 @@ export interface ISQSMessageOptions {
 export interface IEmitOptions {
   /**
    * Set to true when emitting to fifo topic
-   * 
+   *
    * Default is false
    */
-  isFifo?: boolean;
+  isFifo: boolean;
   /**
    * Use with FIFO Topic/Queue to ensure the ordering of events
-   * 
+   *
    * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
   /**
-   * For Direct type, message is sent directly to queue. 
+   * For Queue type, message is sent directly to queue.
    * This means that the quotas for SQS apply here for throttling
-   * 
-   * For Fanout, message is sent from Topic to queues. 
+   *
+   * For Fanout, message is sent from Topic to queues.
    * This means that the quotas for SNS apply here for throttling
-   * 
+   *
    * Default is Fanout
    */
-  exchangeType?: ExchangeType;
+  exchangeType: ExchangeType;
   /**
    * Delay receiving the message on consumer
-   * 
+   *
    * Unit: s
    */
   delay?: number;
@@ -71,9 +71,9 @@ export interface Topic {
   /**
    * The time for which message won't be available to other
    * consumers when it is received by a consumer
-   * 
+   *
    * Unit: s
-   * 
+   *
    * Default: 360s
    */
   visibilityTimeout?: number;
@@ -85,43 +85,41 @@ export interface Topic {
    * Maximum number the broker will attempt to retry the message
    * before which it is added to the related DLQ if deadLetterQueueEnabled
    * is true in emitter options
-   * 
+   *
    * Default: 3
    */
   maxRetryCount?: number;
 
   /**
    * Topic level DLQ specification
-   * 
+   *
    * By default, the value will be whatever is in IEmitterOptions
    */
   deadLetterQueueEnabled?: boolean;
   /**
    * An optional consumer group name
-   * 
+   *
    * Set if you want to use a separate consumer group
-   * 
-   * When specified, messages emitted to this Topic will be received by 
+   *
+   * When specified, messages emitted to this Topic will be received by
    * this specific consumer group only
    */
   separateConsumerGroup?: string;
   /**
    * An optional Lambda function specification
-   * 
+   *
    * When specified, the broker will create an event source
    * mapping for the lambda and consumer
    */
   lambdaHandler?: ILambdaHandler;
   /**
-   * For Direct type, message is sent directly to queue. 
+   * For Queue type, message is sent directly to queue.
    * This means that the quotas for SQS apply here for throttling
-   * 
-   * For Fanout, message is sent from Topic to queues. 
+   *
+   * For Fanout, message is sent from Topic to queues.
    * This means that the quotas for SNS apply here for throttling
-   * 
-   * Default is Fanout
    */
-  exchangeType?: ExchangeType;
+  exchangeType: ExchangeType;
 }
 
 export interface ILambdaHandler {
@@ -129,7 +127,7 @@ export interface ILambdaHandler {
   maximumConcurrency?: number;
 }
 
-export type ConsumeOptions = Omit<Topic, 'name' | 'lambdaHandler'> & {
+export type ConsumeOptions = Omit<Topic, "name" | "lambdaHandler"> & {
   useLocal?: boolean;
 };
 
@@ -140,9 +138,9 @@ export interface IEmitterOptions {
   useExternalBroker?: boolean;
   /**
    * Optional, to log slow messages
-   * 
+   *
    * Unit: ms
-   * 
+   *
    * Default: 60000ms
    */
   maxProcessingTime?: number;
@@ -156,7 +154,7 @@ export interface IEmitterOptions {
   localEmitter: EventEmitter;
   /**
    * An optional event on which failed events will be emitted
-   * 
+   *
    * These include failures when sending and consuming messages
    */
   eventOnFailure?: string;
@@ -164,7 +162,7 @@ export interface IEmitterOptions {
    * Maximum number of times the broker will retry the message
    * in case of failure in consumption after which it will be
    * moved to a DLQ if deadLetterQueueEnabled is true
-   * 
+   *
    * Default: 3
    */
   maxRetries?: number;
@@ -182,7 +180,7 @@ export interface IEmitterOptions {
   lambdaConfig?: Lambda.ClientConfiguration;
   /**
    * Set to true if you want to use DLQs
-   * 
+   *
    * Every topic will have a DLQ created against it that
    * will be used when maxRetryCount is exceeded for a topic
    */
@@ -197,13 +195,13 @@ export interface IEmitterOptions {
   refreshTopicsCache?: boolean;
   /**
    * Optional default queues options when consuming on a default queue
-   * 
-   * When using default queues, Topics for which a separateConsumerGroup 
+   *
+   * When using default queues, Topics for which a separateConsumerGroup
    * is not specified are consumed from the default queues.
    */
   defaultQueueOptions?: {
-    fifo: DefaultQueueOptions,
-    standard: DefaultQueueOptions
+    fifo: DefaultQueueOptions;
+    standard: DefaultQueueOptions;
   };
   /**
    * Optional AWS Config used by the emitter when useExternalBroker is true
@@ -211,14 +209,17 @@ export interface IEmitterOptions {
   awsConfig?: {
     region: string;
     accountId: string;
-  }
+  };
   /**
    * Set to true to enable logging
    */
   log?: boolean;
 }
 
-export type DefaultQueueOptions = Omit<Topic, 'separateConsumerGroup' | 'isFifo' | 'exchangeType'>;
+export type DefaultQueueOptions = Omit<
+  Topic,
+  "separateConsumerGroup" | "isFifo" | "exchangeType"
+>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
@@ -237,7 +238,7 @@ export interface IEmitter {
   on<T>(
     eventName: string,
     listener: EventListener<T>,
-    options?: ConsumeOptions,
+    options?: ConsumeOptions
   ): void;
   removeAllListener(): void;
   removeListener(eventName: string, listener: EventListener<any>): void;
@@ -254,10 +255,11 @@ export interface IEmitter {
   /**
    * @param topicName Actual topic name
    * @param isFifo Set to true if Topic is FIFO
+   * @returns ARN of Topic that the broker generates internally
    */
   getTopicReference(topicName: string, isFifo?: boolean): string;
   /**
-   * 
+   *
    * @param topicName Actual topic name
    * @param isFifo Set to true if Topic is FIFO
    * @returns Name of Topic that the broker generates internally
@@ -300,6 +302,6 @@ export interface ICreateQueueLambdaEventSourceInput {
 }
 
 export enum ExchangeType {
-  Direct = 'Direct',
-  Fanout = 'Fanout'
+  Queue = "Queue",
+  Fanout = "Fanout",
 }

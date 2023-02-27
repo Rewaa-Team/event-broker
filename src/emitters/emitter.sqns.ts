@@ -105,10 +105,12 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(this.options.defaultQueueOptions.fifo.name, {
       ...this.options.defaultQueueOptions.fifo,
       isDefaultQueue: true,
+      exchangeType: ExchangeType.Fanout,
     });
     this.topics.set(this.options.defaultQueueOptions.standard.name, {
       ...this.options.defaultQueueOptions.standard,
       isDefaultQueue: true,
+      exchangeType: ExchangeType.Fanout,
     });
   }
 
@@ -123,7 +125,7 @@ export class SqnsEmitter implements IEmitter {
   private async createTopics() {
     const topicCreationPromises: Promise<void>[] = [];
     this.topics.forEach((topic) => {
-      if(topic.exchangeType === ExchangeType.Direct) {
+      if (topic.exchangeType === ExchangeType.Queue) {
         return;
       }
       topicCreationPromises.push(this.createTopic(topic));
@@ -191,7 +193,7 @@ export class SqnsEmitter implements IEmitter {
     for (let i = 0; i < topics.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
       const chunk = topics.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
       for (const topic of chunk) {
-        if(topic.exchangeType === ExchangeType.Direct) {
+        if (topic.exchangeType === ExchangeType.Queue) {
           continue;
         }
         const queueArn = this.getQueueArn(this.getQueueName(topic));
@@ -246,9 +248,6 @@ export class SqnsEmitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
-    if (!topicArn) {
-      throw new Error(`Topic ARN not found: ${topic.name}`);
-    }
     await this.snsProducer.send(topicArn, {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
@@ -263,9 +262,6 @@ export class SqnsEmitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
-    if (!queueUrl) {
-      throw new Error(`Queue URL not found: ${topic.name}`);
-    }
     await this.sqsProducer.send(
       queueUrl,
       {
@@ -286,16 +282,19 @@ export class SqnsEmitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     try {
-      const topic = this.topics.get(eventName);
-      if (!topic) {
-        throw new Error(`Topic not found for event: ${eventName}`);
-      }
-      if (topic.exchangeType === ExchangeType.Direct) {
+      const topic: Topic = {
+        name: eventName,
+        isFifo: !!options?.isFifo,
+        exchangeType: options?.exchangeType || ExchangeType.Fanout,
+      };
+      if (topic.exchangeType === ExchangeType.Queue) {
         return await this.emitToQueue(topic, options, ...args);
       }
       return await this.emitToTopic(topic, options, ...args);
     } catch (error) {
-      Logger.error(`Message producing failed: ${eventName} ${JSON.stringify(error)}`);
+      Logger.error(
+        `Message producing failed: ${eventName} ${JSON.stringify(error)}`
+      );
       this.logFailedEvent({
         topic: eventName,
         event: args,
@@ -414,7 +413,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       ...options,
       name: eventName,
-      exchangeType: options?.exchangeType || ExchangeType.Fanout
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
     };
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
@@ -450,7 +449,7 @@ export class SqnsEmitter implements IEmitter {
     try {
       snsMessage = JSON.parse(receivedMessage.Body!.toString());
       message = snsMessage as any;
-      if(snsMessage.TopicArn) {
+      if (snsMessage.TopicArn) {
         message = JSON.parse(snsMessage.Message);
       }
     } catch (error) {
@@ -501,6 +500,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
+      exchangeType: ExchangeType.Fanout,
     };
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
@@ -509,6 +509,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
+      exchangeType: ExchangeType.Fanout,
     };
     return this.getTopicName(topic) || "";
   }
