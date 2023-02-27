@@ -4,6 +4,7 @@ import {
   CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
   DEFAULT_MAX_PROCESSING_TIME,
+  DEFAULT_MESSAGE_DELAY,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
   SOURCE_QUEUE_PREFIX,
@@ -21,6 +22,7 @@ import {
   EventListener,
   ConsumeOptions,
   ISNSReceiveMessage,
+  ExchangeType,
 } from "../types";
 import { Logger } from "../utils/utils";
 import { Message } from "@aws-sdk/client-sqs";
@@ -103,10 +105,12 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(this.options.defaultQueueOptions.fifo.name, {
       ...this.options.defaultQueueOptions.fifo,
       isDefaultQueue: true,
+      exchangeType: ExchangeType.Fanout,
     });
     this.topics.set(this.options.defaultQueueOptions.standard.name, {
       ...this.options.defaultQueueOptions.standard,
       isDefaultQueue: true,
+      exchangeType: ExchangeType.Fanout,
     });
   }
 
@@ -121,6 +125,9 @@ export class SqnsEmitter implements IEmitter {
   private async createTopics() {
     const topicCreationPromises: Promise<void>[] = [];
     this.topics.forEach((topic) => {
+      if (topic.exchangeType === ExchangeType.Queue) {
+        return;
+      }
       topicCreationPromises.push(this.createTopic(topic));
     });
     await Promise.all(topicCreationPromises);
@@ -186,6 +193,9 @@ export class SqnsEmitter implements IEmitter {
     for (let i = 0; i < topics.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
       const chunk = topics.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
       for (const topic of chunk) {
+        if (topic.exchangeType === ExchangeType.Queue) {
+          continue;
+        }
         const queueArn = this.getQueueArn(this.getQueueName(topic));
         const topicArn = this.getTopicArn(this.getTopicName(topic));
         if (topic.isDefaultQueue) {
@@ -208,11 +218,20 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
-    const qName = topic.separateConsumerGroup
-      ? topic.separateConsumerGroup.replace(".fifo", "")
-      : topic.isFifo
-      ? this.options.defaultQueueOptions?.fifo.name
-      : this.options.defaultQueueOptions?.standard.name;
+    let qName: string = "";
+    if (topic.separateConsumerGroup) {
+      qName = topic.separateConsumerGroup;
+    } else {
+      if (topic.isFifo) {
+        qName = this.options.defaultQueueOptions?.fifo.name || "";
+      } else {
+        qName = this.options.defaultQueueOptions?.standard.name || "";
+      }
+    }
+    if (topic.exchangeType === ExchangeType.Queue) {
+      qName = topic.name;
+    }
+    qName = qName.replace(".fifo", "");
     return `${this.options.environment}_${this.options.consumerGroup}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
@@ -232,6 +251,40 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter.emit(this.options.eventOnFailure, data);
   };
 
+  async emitToTopic(
+    topic: Topic,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): Promise<boolean> {
+    const topicArn = this.getTopicArn(this.getTopicName(topic));
+    await this.snsProducer.send(topicArn, {
+      messageGroupId: options?.partitionKey || topic.name,
+      eventName: topic.name,
+      data: args,
+    });
+    return true;
+  }
+
+  async emitToQueue(
+    topic: Topic,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): Promise<boolean> {
+    const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+    await this.sqsProducer.send(
+      queueUrl,
+      {
+        messageGroupId: options?.partitionKey || topic.name,
+        eventName: topic.name,
+        data: args,
+      },
+      {
+        delay: options?.delay || DEFAULT_MESSAGE_DELAY,
+      }
+    );
+    return true;
+  }
+
   async emit(
     eventName: string,
     options?: IEmitOptions,
@@ -241,14 +294,12 @@ export class SqnsEmitter implements IEmitter {
       const topic: Topic = {
         name: eventName,
         isFifo: !!options?.isFifo,
+        exchangeType: options?.exchangeType || ExchangeType.Fanout,
       };
-      const topicArn = this.getTopicArn(this.getTopicName(topic));
-      await this.snsProducer.send(topicArn, {
-        messageGroupId: `${options?.partitionKey || ""}_${topic.name}`,
-        eventName: topic.name,
-        data: args,
-      });
-      return true;
+      if (topic.exchangeType === ExchangeType.Queue) {
+        return await this.emitToQueue(topic, options, ...args);
+      }
+      return await this.emitToTopic(topic, options, ...args);
     } catch (error) {
       Logger.error(
         `Message producing failed: ${eventName} ${JSON.stringify(error)}`
@@ -371,6 +422,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       ...options,
       name: eventName,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
     };
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
@@ -405,7 +457,10 @@ export class SqnsEmitter implements IEmitter {
     let message: ISQSMessage;
     try {
       snsMessage = JSON.parse(receivedMessage.Body!.toString());
-      message = JSON.parse(snsMessage.Message);
+      message = snsMessage as any;
+      if (snsMessage.TopicArn) {
+        message = JSON.parse(snsMessage.Message);
+      }
     } catch (error) {
       Logger.error("Failed to parse message");
       this.logFailedEvent({
@@ -454,6 +509,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
+      exchangeType: ExchangeType.Fanout,
     };
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
@@ -462,6 +518,7 @@ export class SqnsEmitter implements IEmitter {
     const topic: Topic = {
       name: topicName,
       isFifo: isFifo,
+      exchangeType: ExchangeType.Fanout,
     };
     return this.getTopicName(topic) || "";
   }
