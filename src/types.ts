@@ -25,6 +25,22 @@ export interface IEmitOptions {
    * Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html
    */
   partitionKey?: string;
+  /**
+   * For Direct type, message is sent directly to queue. 
+   * This means that the quotas for SQS apply here for throttling
+   * 
+   * For Fanout, message is sent from Topic to queues. 
+   * This means that the quotas for SNS apply here for throttling
+   * 
+   * Default is Fanout
+   */
+  exchangeType?: ExchangeType;
+  /**
+   * Delay receiving the message on consumer
+   * 
+   * Unit: s
+   */
+  delay?: number;
 }
 
 export interface IFailedEventMessage {
@@ -96,6 +112,16 @@ export interface Topic {
    * mapping for the lambda and consumer
    */
   lambdaHandler?: ILambdaHandler;
+  /**
+   * For Direct type, message is sent directly to queue. 
+   * This means that the quotas for SQS apply here for throttling
+   * 
+   * For Fanout, message is sent from Topic to queues. 
+   * This means that the quotas for SNS apply here for throttling
+   * 
+   * Default is Fanout
+   */
+  exchangeType?: ExchangeType;
 }
 
 export interface ILambdaHandler {
@@ -192,7 +218,7 @@ export interface IEmitterOptions {
   log?: boolean;
 }
 
-export type DefaultQueueOptions = Omit<Topic, 'separateConsumerGroup'>;
+export type DefaultQueueOptions = Omit<Topic, 'separateConsumerGroup' | 'isFifo' | 'exchangeType'>;
 
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
@@ -271,4 +297,9 @@ export interface ICreateQueueLambdaEventSourceInput {
   queueARN: string;
   maximumConcurrency?: number;
   batchSize?: number;
+}
+
+export enum ExchangeType {
+  Direct = 'Direct',
+  Fanout = 'Fanout'
 }
