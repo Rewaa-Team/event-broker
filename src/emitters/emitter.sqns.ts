@@ -434,11 +434,13 @@ export class SqnsEmitter implements IEmitter {
       }
       const queue: Queue = {
         name:
-          topic.separateConsumerGroup ||
-          (topic.isFifo
-            ? this.options.defaultQueueOptions?.fifo.name
-            : this.options.defaultQueueOptions?.standard.name) ||
-          "",
+          topic.exchangeType === ExchangeType.Queue
+            ? topic.name
+            : topic.separateConsumerGroup ||
+              (topic.isFifo
+                ? this.options.defaultQueueOptions?.fifo.name
+                : this.options.defaultQueueOptions?.standard.name) ||
+              "",
         isFifo: !!topic.isFifo,
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
