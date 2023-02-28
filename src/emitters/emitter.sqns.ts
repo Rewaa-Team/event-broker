@@ -427,9 +427,10 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
-      if (!topic.separateConsumerGroup && !this.options.defaultQueueOptions) {
+      if (!topic.separateConsumerGroup && topic.exchangeType === ExchangeType.Fanout && !this.options.defaultQueueOptions) {
         throw new Error(
-          `${topic.name} - separateConsumerGroup is required when defaultQueueOptions are not specified.`
+          `${topic.name} - separateConsumerGroup is required when defaultQueueOptions are not specified.
+          Or the Exchange Type should be Queue`
         );
       }
       const queue: Queue = {
