@@ -83,9 +83,12 @@ export class SqnsEmitter implements IEmitter {
       const queueName = this.getQueueName(topic);
       if (topic.lambdaHandler && !uniqueQueueMap.has(queueName)) {
         uniqueQueueMap.set(queueName, true);
+        const lambdaName = topic.lambdaHandler.useServerlessLambdaName
+          ? `${this.options.consumerGroup}-${this.options.environment}-${topic.lambdaHandler.functionName}`
+          : topic.lambdaHandler.functionName;
         promises.push(
           this.lambdaClient.createQueueMappingForLambda({
-            functionName: topic.lambdaHandler.functionName,
+            functionName: lambdaName,
             queueARN: this.getQueueArn(queueName),
             batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
             maximumConcurrency: topic.lambdaHandler.maximumConcurrency,
