@@ -127,6 +127,11 @@ export interface Topic {
 export interface ILambdaHandler {
   functionName: string;
   maximumConcurrency?: number;
+  /**
+   * When set to true, the function name is constructed internally as
+   * consumerGroup-environment-functionName
+   */
+  useServerlessLambdaName?: boolean;
 }
 
 export type ConsumeOptions = Omit<Topic, "name" | "lambdaHandler"> & {
