@@ -235,7 +235,7 @@ export class SqnsEmitter implements IEmitter {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${this.options.consumerGroup}_${
+    return `${this.options.environment}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
@@ -298,6 +298,7 @@ export class SqnsEmitter implements IEmitter {
         name: eventName,
         isFifo: !!options?.isFifo,
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
+        separateConsumerGroup: options?.consumerGroup
       };
       if (topic.exchangeType === ExchangeType.Queue) {
         return await this.emitToQueue(topic, options, ...args);

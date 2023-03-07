@@ -36,6 +36,10 @@ export interface IEmitOptions {
    */
   exchangeType: ExchangeType;
   /**
+   * Use to identify separate queue
+   */
+  consumerGroup?: string;
+  /**
    * Delay receiving the message on consumer
    *
    * Unit: s
@@ -193,7 +197,7 @@ export interface IEmitterOptions {
    */
   deadLetterQueueEnabled?: boolean;
   /**
-   * Used as prefix for internal queues
+   * Used as prefix for lambda handlers
    */
   consumerGroup: string;
   /**
