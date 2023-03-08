@@ -12,6 +12,16 @@ export interface ISQSMessageOptions {
   delay: number;
 }
 
+type Binary = Buffer | Uint8Array | Blob | string;
+
+export interface IMessageAttributes {
+	DataType: 'String' | 'Number' | 'Binary' | 'String.Array';
+	StringValue?: string;
+	BinaryValue?: Binary;
+	StringListValues?: string[];
+	BinaryListValues?: Binary[];
+}
+
 export interface IEmitOptions {
   /**
    * Set to true when emitting to fifo topic
@@ -45,6 +55,11 @@ export interface IEmitOptions {
    * Unit: s
    */
   delay?: number;
+
+  /**
+   * Message attributes to be sent along with the message
+   */
+  MessageAttributes?: { [key: string]: IMessageAttributes };
 }
 
 export interface IFailedEventMessage {
@@ -67,65 +82,72 @@ export interface Queue {
 }
 
 export interface Topic {
-  name: string;
-  /**
-   * Set to true if topic is FIFO, default is false
-   */
-  isFifo?: boolean;
-  /**
-   * The time for which message won't be available to other
-   * consumers when it is received by a consumer
-   *
-   * Unit: s
-   *
-   * Default: 360s
-   */
-  visibilityTimeout?: number;
-  /**
-   * Default: 10 for consumption
-   */
-  batchSize?: number;
-  /**
-   * Maximum number the broker will attempt to retry the message
-   * before which it is added to the related DLQ if deadLetterQueueEnabled
-   * is true in emitter options
-   *
-   * Default: 3
-   */
-  maxRetryCount?: number;
+	name: string;
+	/**
+	 * Set to true if topic is FIFO, default is false
+	 */
+	isFifo?: boolean;
+	/**
+	 * The time for which message won't be available to other
+	 * consumers when it is received by a consumer
+	 *
+	 * Unit: s
+	 *
+	 * Default: 360s
+	 */
+	visibilityTimeout?: number;
+	/**
+	 * Default: 10 for consumption
+	 */
+	batchSize?: number;
+	/**
+	 * Maximum number the broker will attempt to retry the message
+	 * before which it is added to the related DLQ if deadLetterQueueEnabled
+	 * is true in emitter options
+	 *
+	 * Default: 3
+	 */
+	maxRetryCount?: number;
 
-  /**
-   * Topic level DLQ specification
-   *
-   * By default, the value will be whatever is in IEmitterOptions
-   */
-  deadLetterQueueEnabled?: boolean;
-  /**
-   * An optional consumer group name
-   *
-   * Set if you want to use a separate consumer group
-   *
-   * When specified, messages emitted to this Topic will be received by
-   * this specific consumer group only
-   */
-  separateConsumerGroup?: string;
-  /**
-   * An optional Lambda function specification
-   *
-   * When specified, the broker will create an event source
-   * mapping for the lambda and consumer
-   */
-  lambdaHandler?: ILambdaHandler;
-  /**
-   * For Queue type, message is sent directly to queue.
-   * This means that the quotas for SQS apply here for throttling
-   *
-   * For Fanout, message is sent from Topic to queues.
-   * This means that the quotas for SNS apply here for throttling
-   * 
-   * Queue exchange type is always consumed via a separate consumer group (queue)
-   */
-  exchangeType: ExchangeType;
+	/**
+	 * Topic level DLQ specification
+	 *
+	 * By default, the value will be whatever is in IEmitterOptions
+	 */
+	deadLetterQueueEnabled?: boolean;
+	/**
+	 * An optional consumer group name
+	 *
+	 * Set if you want to use a separate consumer group
+	 *
+	 * When specified, messages emitted to this Topic will be received by
+	 * this specific consumer group only
+	 */
+	separateConsumerGroup?: string;
+	/**
+	 * An optional Lambda function specification
+	 *
+	 * When specified, the broker will create an event source
+	 * mapping for the lambda and consumer
+	 */
+	lambdaHandler?: ILambdaHandler;
+	/**
+	 * For Queue type, message is sent directly to queue.
+	 * This means that the quotas for SQS apply here for throttling
+	 *
+	 * For Fanout, message is sent from Topic to queues.
+	 * This means that the quotas for SNS apply here for throttling
+	 *
+	 * Queue exchange type is always consumed via a separate consumer group (queue)
+	 */
+	exchangeType: ExchangeType;
+	/**
+	 * An optional filter policy
+	 *
+	 * When specified, the broker will create an event source
+	 * mapping for the lambda and consumer
+	 */
+	filterPolicy?: { [key: string]: string[] };
 }
 
 export interface ILambdaHandler {
@@ -288,9 +310,10 @@ export interface IEmitter {
 }
 
 export interface ISNSMessage {
-  data: any;
-  eventName: string;
-  messageGroupId?: string;
+	data: any;
+	eventName: string;
+	messageGroupId?: string;
+	messageAttr?: { [key: string]: IMessageAttributes };
 }
 
 export interface ISNSReceiveMessage {

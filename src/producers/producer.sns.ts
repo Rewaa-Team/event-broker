@@ -17,8 +17,9 @@ export class SNSProducer {
 
     send = async (
         topicArn: string,
-        message: ISNSMessage
+        iMessage: ISNSMessage
     ): Promise<SNS.PublishResponse> => {
+        const { messageAttr, messageGroupId, ...message } = iMessage;
         const params: SNS.PublishInput = {
             Message: JSON.stringify(message),
             TargetArn: topicArn
@@ -26,8 +27,10 @@ export class SNSProducer {
 
         if (this.isFifoTopic(topicArn)) {
             params.MessageDeduplicationId = v4();
-            params.MessageGroupId = message.messageGroupId;
+            params.MessageGroupId = messageGroupId;
         }
+
+        if (messageAttr) params.MessageAttributes = messageAttr;
 
         return await this.sns.publish(params).promise();
     };
@@ -54,12 +57,19 @@ export class SNSProducer {
         }
     };
 
-    subscribeToTopic = async (topicArn: string, queueArn: string): Promise<SNS.SubscribeResponse> => {
+    subscribeToTopic = async (topicArn: string, queueArn: string, filterPolicy?: any): Promise<SNS.SubscribeResponse> => {
         const params: SNS.SubscribeInput = {
             TopicArn: topicArn,
             Protocol: 'sqs',
             Endpoint: queueArn
         }
+
+        if (filterPolicy) {
+            params.Attributes = {
+                FilterPolicy: JSON.stringify(filterPolicy),
+            };
+        }
+        
         try {
             return await this.sns.subscribe(params).promise();
         } catch (error) {

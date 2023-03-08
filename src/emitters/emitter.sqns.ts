@@ -185,6 +185,9 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueUrl(queueName: string): string {
+    if (this.options.environment === 'local') {
+      return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`
+    }
     return `https://sqs.${this.options.awsConfig?.region}.amazonaws.com/${this.options.awsConfig?.accountId}/${queueName}`;
   }
 
@@ -211,7 +214,7 @@ export class SqnsEmitter implements IEmitter {
           continue;
         }
         subscriptionPromises.push(
-          this.snsProducer.subscribeToTopic(topicArn, queueArn)
+          this.snsProducer.subscribeToTopic(topicArn, queueArn, topic.filterPolicy)
         );
       }
       await Promise.all(subscriptionPromises);
@@ -261,10 +264,11 @@ export class SqnsEmitter implements IEmitter {
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     await this.snsProducer.send(topicArn, {
-      messageGroupId: options?.partitionKey || topic.name,
-      eventName: topic.name,
-      data: args,
-    });
+			messageGroupId: options?.partitionKey || topic.name,
+			eventName: topic.name,
+			messageAttr: options?.MessageAttributes,
+			data: args,
+		});
     return true;
   }
 
@@ -273,7 +277,8 @@ export class SqnsEmitter implements IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean> {
-    const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+    const selectedTopic = this.topics.get(topic.name) as Topic;
+    const queueUrl = this.getQueueUrl(this.getQueueName(selectedTopic || topic));
     await this.sqsProducer.send(
       queueUrl,
       {
