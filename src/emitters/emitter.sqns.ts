@@ -185,6 +185,9 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueUrl(queueName: string): string {
+    if (this.options.isLocal) {
+			return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`;
+		}
     return `https://sqs.${this.options.awsConfig?.region}.amazonaws.com/${this.options.awsConfig?.accountId}/${queueName}`;
   }
 
@@ -211,7 +214,7 @@ export class SqnsEmitter implements IEmitter {
           continue;
         }
         subscriptionPromises.push(
-          this.snsProducer.subscribeToTopic(topicArn, queueArn)
+          this.snsProducer.subscribeToTopic(topicArn, queueArn, topic.filterPolicy)
         );
       }
       await Promise.all(subscriptionPromises);
@@ -235,7 +238,7 @@ export class SqnsEmitter implements IEmitter {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${this.options.consumerGroup}_${
+    return `${this.options.environment}_${
       isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
     }_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
@@ -261,10 +264,11 @@ export class SqnsEmitter implements IEmitter {
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     await this.snsProducer.send(topicArn, {
-      messageGroupId: options?.partitionKey || topic.name,
-      eventName: topic.name,
-      data: args,
-    });
+			messageGroupId: options?.partitionKey || topic.name,
+			eventName: topic.name,
+			messageAttr: options?.MessageAttributes,
+			data: args,
+		});
     return true;
   }
 
@@ -298,6 +302,7 @@ export class SqnsEmitter implements IEmitter {
         name: eventName,
         isFifo: !!options?.isFifo,
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
+        separateConsumerGroup: options?.consumerGroup
       };
       if (topic.exchangeType === ExchangeType.Queue) {
         return await this.emitToQueue(topic, options, ...args);
