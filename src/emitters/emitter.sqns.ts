@@ -185,9 +185,9 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueUrl(queueName: string): string {
-    if (this.options.environment === 'local') {
-      return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`
-    }
+    if (this.options.isLocal) {
+			return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`;
+		}
     return `https://sqs.${this.options.awsConfig?.region}.amazonaws.com/${this.options.awsConfig?.accountId}/${queueName}`;
   }
 

@@ -165,88 +165,92 @@ export type ConsumeOptions = Omit<Topic, "name" | "lambdaHandler"> & {
 };
 
 export interface IEmitterOptions {
-  /**
-   * Set to true if using external broker as client
-   */
-  useExternalBroker?: boolean;
-  /**
-   * Optional, to log slow messages
-   *
-   * Unit: ms
-   *
-   * Default: 60000ms
-   */
-  maxProcessingTime?: number;
-  /**
-   * local, dev, stag, prod etc
-   */
-  environment: string;
-  /**
-   * The local NodeJS Emitter used for logging failed events
-   */
-  localEmitter: EventEmitter;
-  /**
-   * An optional event on which failed events will be emitted
-   *
-   * These include failures when sending and consuming messages
-   */
-  eventOnFailure?: string;
-  /**
-   * Maximum number of times the broker will retry the message
-   * in case of failure in consumption after which it will be
-   * moved to a DLQ if deadLetterQueueEnabled is true
-   *
-   * Default: 3
-   */
-  maxRetries?: number;
-  /**
-   * Optional SQS Client config used by message producer
-   */
-  sqsConfig?: SQS.ClientConfiguration;
-  /**
-   * Optional SNS Client config used by message producer
-   */
-  snsConfig?: SNS.ClientConfiguration;
-  /**
-   * Optional Lambda Client config used by message producer
-   */
-  lambdaConfig?: Lambda.ClientConfiguration;
-  /**
-   * Set to true if you want to use DLQs
-   *
-   * Every topic will have a DLQ created against it that
-   * will be used when maxRetryCount is exceeded for a topic
-   */
-  deadLetterQueueEnabled?: boolean;
-  /**
-   * Used as prefix for lambda handlers
-   */
-  consumerGroup: string;
-  /**
-   * Use this to force load topics from external clients
-   */
-  refreshTopicsCache?: boolean;
-  /**
-   * Optional default queues options when consuming on a default queue
-   *
-   * When using default queues, Topics for which a separateConsumerGroup
-   * is not specified are consumed from the default queues.
-   */
-  defaultQueueOptions?: {
-    fifo: DefaultQueueOptions;
-    standard: DefaultQueueOptions;
-  };
-  /**
-   * Optional AWS Config used by the emitter when useExternalBroker is true
-   */
-  awsConfig?: {
-    region: string;
-    accountId: string;
-  };
-  /**
-   * Set to true to enable logging
-   */
-  log?: boolean;
+	/**
+	 * Set to true if using external broker as client
+	 */
+	useExternalBroker?: boolean;
+	/**
+	 * Optional, to log slow messages
+	 *
+	 * Unit: ms
+	 *
+	 * Default: 60000ms
+	 */
+	maxProcessingTime?: number;
+	/**
+	 * local, dev, stag, prod etc
+	 */
+	environment: string;
+	/**
+	 * The local NodeJS Emitter used for logging failed events
+	 */
+	localEmitter: EventEmitter;
+	/**
+	 * An optional event on which failed events will be emitted
+	 *
+	 * These include failures when sending and consuming messages
+	 */
+	eventOnFailure?: string;
+	/**
+	 * Maximum number of times the broker will retry the message
+	 * in case of failure in consumption after which it will be
+	 * moved to a DLQ if deadLetterQueueEnabled is true
+	 *
+	 * Default: 3
+	 */
+	maxRetries?: number;
+	/**
+	 * Optional SQS Client config used by message producer
+	 */
+	sqsConfig?: SQS.ClientConfiguration;
+	/**
+	 * Optional SNS Client config used by message producer
+	 */
+	snsConfig?: SNS.ClientConfiguration;
+	/**
+	 * Optional Lambda Client config used by message producer
+	 */
+	lambdaConfig?: Lambda.ClientConfiguration;
+	/**
+	 * Set to true if you want to use DLQs
+	 *
+	 * Every topic will have a DLQ created against it that
+	 * will be used when maxRetryCount is exceeded for a topic
+	 */
+	deadLetterQueueEnabled?: boolean;
+	/**
+	 * Used as prefix for lambda handlers
+	 */
+	consumerGroup: string;
+	/**
+	 * Use this to force load topics from external clients
+	 */
+	refreshTopicsCache?: boolean;
+	/**
+	 * Optional default queues options when consuming on a default queue
+	 *
+	 * When using default queues, Topics for which a separateConsumerGroup
+	 * is not specified are consumed from the default queues.
+	 */
+	defaultQueueOptions?: {
+		fifo: DefaultQueueOptions;
+		standard: DefaultQueueOptions;
+	};
+	/**
+	 * Optional AWS Config used by the emitter when useExternalBroker is true
+	 */
+	awsConfig?: {
+		region: string;
+		accountId: string;
+	};
+	/**
+	 * Set to true to enable logging
+	 */
+	log?: boolean;
+	/**
+	 * Set to true to enable local aws
+	 */
+	isLocal?: boolean;
 }
 
 export type DefaultQueueOptions = Omit<
