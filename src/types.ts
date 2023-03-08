@@ -12,6 +12,16 @@ export interface ISQSMessageOptions {
   delay: number;
 }
 
+type Binary = Buffer | Uint8Array | Blob | string;
+
+export interface IMessageAttributes {
+	DataType: 'String' | 'Number' | 'Binary' | 'String.Array';
+	StringValue?: string;
+	BinaryValue?: Binary;
+	StringListValues?: string[];
+	BinaryListValues?: Binary[];
+}
+
 export interface IEmitOptions {
   /**
    * Set to true when emitting to fifo topic
@@ -45,6 +55,11 @@ export interface IEmitOptions {
    * Unit: s
    */
   delay?: number;
+
+  /**
+   * Message attributes to be sent along with the message
+   */
+  MessageAttributes?: { [key: string]: IMessageAttributes };
 }
 
 export interface IFailedEventMessage {
@@ -67,65 +82,72 @@ export interface Queue {
 }
 
 export interface Topic {
-  name: string;
-  /**
-   * Set to true if topic is FIFO, default is false
-   */
-  isFifo?: boolean;
-  /**
-   * The time for which message won't be available to other
-   * consumers when it is received by a consumer
-   *
-   * Unit: s
-   *
-   * Default: 360s
-   */
-  visibilityTimeout?: number;
-  /**
-   * Default: 10 for consumption
-   */
-  batchSize?: number;
-  /**
-   * Maximum number the broker will attempt to retry the message
-   * before which it is added to the related DLQ if deadLetterQueueEnabled
-   * is true in emitter options
-   *
-   * Default: 3
-   */
-  maxRetryCount?: number;
+	name: string;
+	/**
+	 * Set to true if topic is FIFO, default is false
+	 */
+	isFifo?: boolean;
+	/**
+	 * The time for which message won't be available to other
+	 * consumers when it is received by a consumer
+	 *
+	 * Unit: s
+	 *
+	 * Default: 360s
+	 */
+	visibilityTimeout?: number;
+	/**
+	 * Default: 10 for consumption
+	 */
+	batchSize?: number;
+	/**
+	 * Maximum number the broker will attempt to retry the message
+	 * before which it is added to the related DLQ if deadLetterQueueEnabled
+	 * is true in emitter options
+	 *
+	 * Default: 3
+	 */
+	maxRetryCount?: number;
 
-  /**
-   * Topic level DLQ specification
-   *
-   * By default, the value will be whatever is in IEmitterOptions
-   */
-  deadLetterQueueEnabled?: boolean;
-  /**
-   * An optional consumer group name
-   *
-   * Set if you want to use a separate consumer group
-   *
-   * When specified, messages emitted to this Topic will be received by
-   * this specific consumer group only
-   */
-  separateConsumerGroup?: string;
-  /**
-   * An optional Lambda function specification
-   *
-   * When specified, the broker will create an event source
-   * mapping for the lambda and consumer
-   */
-  lambdaHandler?: ILambdaHandler;
-  /**
-   * For Queue type, message is sent directly to queue.
-   * This means that the quotas for SQS apply here for throttling
-   *
-   * For Fanout, message is sent from Topic to queues.
-   * This means that the quotas for SNS apply here for throttling
-   * 
-   * Queue exchange type is always consumed via a separate consumer group (queue)
-   */
-  exchangeType: ExchangeType;
+	/**
+	 * Topic level DLQ specification
+	 *
+	 * By default, the value will be whatever is in IEmitterOptions
+	 */
+	deadLetterQueueEnabled?: boolean;
+	/**
+	 * An optional consumer group name
+	 *
+	 * Set if you want to use a separate consumer group
+	 *
+	 * When specified, messages emitted to this Topic will be received by
+	 * this specific consumer group only
+	 */
+	separateConsumerGroup?: string;
+	/**
+	 * An optional Lambda function specification
+	 *
+	 * When specified, the broker will create an event source
+	 * mapping for the lambda and consumer
+	 */
+	lambdaHandler?: ILambdaHandler;
+	/**
+	 * For Queue type, message is sent directly to queue.
+	 * This means that the quotas for SQS apply here for throttling
+	 *
+	 * For Fanout, message is sent from Topic to queues.
+	 * This means that the quotas for SNS apply here for throttling
+	 *
+	 * Queue exchange type is always consumed via a separate consumer group (queue)
+	 */
+	exchangeType: ExchangeType;
+	/**
+	 * An optional filter policy
+	 *
+	 * When specified, the broker will create an event source
+	 * mapping for the lambda and consumer
+	 */
+	filterPolicy?: { [key: string]: string[] };
 }
 
 export interface ILambdaHandler {
@@ -143,88 +165,92 @@ export type ConsumeOptions = Omit<Topic, "name" | "lambdaHandler"> & {
 };
 
 export interface IEmitterOptions {
-  /**
-   * Set to true if using external broker as client
-   */
-  useExternalBroker?: boolean;
-  /**
-   * Optional, to log slow messages
-   *
-   * Unit: ms
-   *
-   * Default: 60000ms
-   */
-  maxProcessingTime?: number;
-  /**
-   * local, dev, stag, prod etc
-   */
-  environment: string;
-  /**
-   * The local NodeJS Emitter used for logging failed events
-   */
-  localEmitter: EventEmitter;
-  /**
-   * An optional event on which failed events will be emitted
-   *
-   * These include failures when sending and consuming messages
-   */
-  eventOnFailure?: string;
-  /**
-   * Maximum number of times the broker will retry the message
-   * in case of failure in consumption after which it will be
-   * moved to a DLQ if deadLetterQueueEnabled is true
-   *
-   * Default: 3
-   */
-  maxRetries?: number;
-  /**
-   * Optional SQS Client config used by message producer
-   */
-  sqsConfig?: SQS.ClientConfiguration;
-  /**
-   * Optional SNS Client config used by message producer
-   */
-  snsConfig?: SNS.ClientConfiguration;
-  /**
-   * Optional Lambda Client config used by message producer
-   */
-  lambdaConfig?: Lambda.ClientConfiguration;
-  /**
-   * Set to true if you want to use DLQs
-   *
-   * Every topic will have a DLQ created against it that
-   * will be used when maxRetryCount is exceeded for a topic
-   */
-  deadLetterQueueEnabled?: boolean;
-  /**
-   * Used as prefix for lambda handlers
-   */
-  consumerGroup: string;
-  /**
-   * Use this to force load topics from external clients
-   */
-  refreshTopicsCache?: boolean;
-  /**
-   * Optional default queues options when consuming on a default queue
-   *
-   * When using default queues, Topics for which a separateConsumerGroup
-   * is not specified are consumed from the default queues.
-   */
-  defaultQueueOptions?: {
-    fifo: DefaultQueueOptions;
-    standard: DefaultQueueOptions;
-  };
-  /**
-   * Optional AWS Config used by the emitter when useExternalBroker is true
-   */
-  awsConfig?: {
-    region: string;
-    accountId: string;
-  };
-  /**
-   * Set to true to enable logging
-   */
-  log?: boolean;
+	/**
+	 * Set to true if using external broker as client
+	 */
+	useExternalBroker?: boolean;
+	/**
+	 * Optional, to log slow messages
+	 *
+	 * Unit: ms
+	 *
+	 * Default: 60000ms
+	 */
+	maxProcessingTime?: number;
+	/**
+	 * local, dev, stag, prod etc
+	 */
+	environment: string;
+	/**
+	 * The local NodeJS Emitter used for logging failed events
+	 */
+	localEmitter: EventEmitter;
+	/**
+	 * An optional event on which failed events will be emitted
+	 *
+	 * These include failures when sending and consuming messages
+	 */
+	eventOnFailure?: string;
+	/**
+	 * Maximum number of times the broker will retry the message
+	 * in case of failure in consumption after which it will be
+	 * moved to a DLQ if deadLetterQueueEnabled is true
+	 *
+	 * Default: 3
+	 */
+	maxRetries?: number;
+	/**
+	 * Optional SQS Client config used by message producer
+	 */
+	sqsConfig?: SQS.ClientConfiguration;
+	/**
+	 * Optional SNS Client config used by message producer
+	 */
+	snsConfig?: SNS.ClientConfiguration;
+	/**
+	 * Optional Lambda Client config used by message producer
+	 */
+	lambdaConfig?: Lambda.ClientConfiguration;
+	/**
+	 * Set to true if you want to use DLQs
+	 *
+	 * Every topic will have a DLQ created against it that
+	 * will be used when maxRetryCount is exceeded for a topic
+	 */
+	deadLetterQueueEnabled?: boolean;
+	/**
+	 * Used as prefix for lambda handlers
+	 */
+	consumerGroup: string;
+	/**
+	 * Use this to force load topics from external clients
+	 */
+	refreshTopicsCache?: boolean;
+	/**
+	 * Optional default queues options when consuming on a default queue
+	 *
+	 * When using default queues, Topics for which a separateConsumerGroup
+	 * is not specified are consumed from the default queues.
+	 */
+	defaultQueueOptions?: {
+		fifo: DefaultQueueOptions;
+		standard: DefaultQueueOptions;
+	};
+	/**
+	 * Optional AWS Config used by the emitter when useExternalBroker is true
+	 */
+	awsConfig?: {
+		region: string;
+		accountId: string;
+	};
+	/**
+	 * Set to true to enable logging
+	 */
+	log?: boolean;
+	/**
+	 * Set to true to enable local aws
+	 */
+	isLocal?: boolean;
 }
 
 export type DefaultQueueOptions = Omit<
@@ -288,9 +314,10 @@ export interface IEmitter {
 }
 
 export interface ISNSMessage {
-  data: any;
-  eventName: string;
-  messageGroupId?: string;
+	data: any;
+	eventName: string;
+	messageGroupId?: string;
+	messageAttr?: { [key: string]: IMessageAttributes };
 }
 
 export interface ISNSReceiveMessage {
