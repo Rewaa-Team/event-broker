@@ -277,8 +277,7 @@ export class SqnsEmitter implements IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean> {
-    const selectedTopic = this.topics.get(topic.name) as Topic;
-    const queueUrl = this.getQueueUrl(this.getQueueName(selectedTopic || topic));
+    const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     await this.sqsProducer.send(
       queueUrl,
       {
