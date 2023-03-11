@@ -234,7 +234,7 @@ export class SqnsEmitter implements IEmitter {
         qName = this.options.defaultQueueOptions?.standard.name || "";
       }
     }
-    if (topic.exchangeType === ExchangeType.Queue) {
+    if (topic.exchangeType === ExchangeType.Queue && !topic.separateConsumerGroup) {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
