@@ -163,11 +163,22 @@ export class SqnsEmitter implements IEmitter {
 
   private async createQueues() {
     const queueCreationPromises: Promise<void>[] = [];
-    this.queues.forEach((queue) => {
+    const queues = Array.from(this.queues, ([_, value]) => {
+      return value;
+    });
+    queues.forEach((queue) => {
       const topic = queue.topic;
       queueCreationPromises.push(this.createQueue(topic));
     });
-    await Promise.all(queueCreationPromises);
+    const responses = await Promise.allSettled(queueCreationPromises);
+    responses.forEach((response, index) => {
+      if(response.status === 'rejected') {
+        // Checking this for localstack since it throws when queue already exists
+        if(response.reason.code !== 'QueueAlreadyExists') {
+          throw new Error(`Queue creation failed: ${queues[index].name} - ${response.reason}`);
+        }
+      }
+    });
     Logger.info(`Queues created`);
   }
 
