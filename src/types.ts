@@ -79,6 +79,7 @@ export interface Queue {
   visibilityTimeout?: number;
   batchSize?: number;
   listenerIsLambda?: boolean;
+  topic: Topic;
 }
 
 export interface Topic {
