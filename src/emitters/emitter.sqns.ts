@@ -162,14 +162,9 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createQueues() {
-    const uniqueQueueMap: Map<string, boolean> = new Map();
     const queueCreationPromises: Promise<void>[] = [];
-    this.topics.forEach((topic) => {
-      const queueName = this.getQueueName(topic);
-      if (uniqueQueueMap.has(queueName)) {
-        return;
-      }
-      uniqueQueueMap.set(queueName, true);
+    this.queues.forEach((queue) => {
+      const topic = queue.topic;
       queueCreationPromises.push(this.createQueue(topic));
     });
     await Promise.all(queueCreationPromises);
@@ -458,6 +453,7 @@ export class SqnsEmitter implements IEmitter {
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
         listenerIsLambda: !!topic.lambdaHandler,
+        topic
       };
       this.queues.set(queueName, queue);
     }
