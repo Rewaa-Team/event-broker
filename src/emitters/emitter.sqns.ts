@@ -117,6 +117,13 @@ export class SqnsEmitter implements IEmitter {
     });
   }
 
+  private isDefaultQueue(name: string): boolean {
+    return (
+      name === this.options.defaultQueueOptions?.fifo.name ||
+      name === this.options.defaultQueueOptions?.standard.name
+    );
+  }
+
   private async createTopic(topic: Topic) {
     let topicAttributes: Record<string, string> = {};
     await this.snsProducer.createTopic(
@@ -172,10 +179,12 @@ export class SqnsEmitter implements IEmitter {
     });
     const responses = await Promise.allSettled(queueCreationPromises);
     responses.forEach((response, index) => {
-      if(response.status === 'rejected') {
+      if (response.status === "rejected") {
         // Checking this for localstack since it throws when queue already exists
-        if(response.reason.code !== 'QueueAlreadyExists') {
-          throw new Error(`Queue creation failed: ${queues[index].name} - ${response.reason}`);
+        if (response.reason.code !== "QueueAlreadyExists") {
+          throw new Error(
+            `Queue creation failed: ${queues[index].name} - ${response.reason}`
+          );
         }
       }
     });
@@ -192,35 +201,39 @@ export class SqnsEmitter implements IEmitter {
 
   private getQueueUrl(queueName: string): string {
     if (this.options.isLocal) {
-			return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`;
-		}
+      return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`;
+    }
     return `https://sqs.${this.options.awsConfig?.region}.amazonaws.com/${this.options.awsConfig?.accountId}/${queueName}`;
   }
 
   private async subscribeToTopics() {
     let subscriptionPromises: Promise<SNS.SubscribeResponse>[] = [];
-    const topics = Array.from(this.topics, ([_, value]) => {
+    const queues = Array.from(this.queues, ([_, value]) => {
       return value;
     });
-    for (let i = 0; i < topics.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
-      const chunk = topics.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
-      for (const topic of chunk) {
-        if (topic.exchangeType === ExchangeType.Queue) {
+    for (let i = 0; i < queues.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
+      const chunk = queues.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
+      for (const queue of chunk) {
+        if (queue.topic.exchangeType === ExchangeType.Queue) {
           continue;
         }
-        const queueArn = this.getQueueArn(this.getQueueName(topic));
-        const topicArn = this.getTopicArn(this.getTopicName(topic));
-        if (topic.isDefaultQueue) {
+        const queueArn = this.getQueueArn(this.getQueueName(queue.topic));
+        const topicArn = this.getTopicArn(this.getTopicName(queue.topic));
+        if (this.isDefaultQueue(queue.name)) {
           continue;
         }
         if (!queueArn || !topicArn) {
           Logger.warn(
-            `Skipping subscription for topic: ${topic.name}. Topic ARN: ${topicArn} Queue ARN: ${queueArn}`
+            `Skipping subscription for topic: ${queue.topic.name}. Topic ARN: ${topicArn} Queue ARN: ${queueArn}`
           );
           continue;
         }
         subscriptionPromises.push(
-          this.snsProducer.subscribeToTopic(topicArn, queueArn, topic.filterPolicy)
+          this.snsProducer.subscribeToTopic(
+            topicArn,
+            queueArn,
+            queue.topic.filterPolicy
+          )
         );
       }
       await Promise.all(subscriptionPromises);
@@ -240,7 +253,10 @@ export class SqnsEmitter implements IEmitter {
         qName = this.options.defaultQueueOptions?.standard.name || "";
       }
     }
-    if (topic.exchangeType === ExchangeType.Queue && !topic.separateConsumerGroup) {
+    if (
+      topic.exchangeType === ExchangeType.Queue &&
+      !topic.separateConsumerGroup
+    ) {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
@@ -270,11 +286,11 @@ export class SqnsEmitter implements IEmitter {
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     await this.snsProducer.send(topicArn, {
-			messageGroupId: options?.partitionKey || topic.name,
-			eventName: topic.name,
-			messageAttr: options?.MessageAttributes,
-			data: args,
-		});
+      messageGroupId: options?.partitionKey || topic.name,
+      eventName: topic.name,
+      messageAttr: options?.MessageAttributes,
+      data: args,
+    });
     return true;
   }
 
@@ -308,7 +324,7 @@ export class SqnsEmitter implements IEmitter {
         name: eventName,
         isFifo: !!options?.isFifo,
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
-        separateConsumerGroup: options?.consumerGroup
+        separateConsumerGroup: options?.consumerGroup,
       };
       if (topic.exchangeType === ExchangeType.Queue) {
         return await this.emitToQueue(topic, options, ...args);
@@ -441,7 +457,11 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     const queueName = this.getQueueName(topic);
     if (!this.queues.has(queueName)) {
-      if (!topic.separateConsumerGroup && topic.exchangeType === ExchangeType.Fanout && !this.options.defaultQueueOptions) {
+      if (
+        !topic.separateConsumerGroup &&
+        topic.exchangeType === ExchangeType.Fanout &&
+        !this.options.defaultQueueOptions
+      ) {
         throw new Error(
           `${topic.name} - separateConsumerGroup is required when defaultQueueOptions are not specified.
           Or the Exchange Type should be Queue`
@@ -464,7 +484,7 @@ export class SqnsEmitter implements IEmitter {
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
         listenerIsLambda: !!topic.lambdaHandler,
-        topic
+        topic,
       };
       this.queues.set(queueName, queue);
     }
