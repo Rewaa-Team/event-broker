@@ -83,9 +83,7 @@ export class SqnsEmitter implements IEmitter {
       const queueName = this.getQueueName(topic);
       if (topic.lambdaHandler && !uniqueQueueMap.has(queueName)) {
         uniqueQueueMap.set(queueName, true);
-        const lambdaName = topic.lambdaHandler.useServerlessLambdaName
-          ? `${this.options.consumerGroup}-${this.options.environment}-${topic.lambdaHandler.functionName}`
-          : topic.lambdaHandler.functionName;
+        const lambdaName = topic.lambdaHandler.functionName;
         promises.push(
           this.lambdaClient.createQueueMappingForLambda({
             functionName: lambdaName,
@@ -97,7 +95,11 @@ export class SqnsEmitter implements IEmitter {
       }
     });
     await Promise.all(promises);
-    Logger.info(`Event source mappings created`);
+    if (promises.length) {
+      Logger.info(`Event source mappings created`);
+    } else {
+      Logger.info(`No event source mappings created`);
+    }
   }
 
   private addDefaultQueues() {
@@ -543,29 +545,27 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  getTopicReference(topicName: string, isFifo?: boolean): string {
-    const topic: Topic = {
-      name: topicName,
-      isFifo: isFifo,
-      exchangeType: ExchangeType.Fanout,
-    };
+  getTopicReference(topic: Topic): string {
     return this.getTopicArn(this.getTopicName(topic)) || "";
   }
 
-  getInternalTopicName(topicName: string, isFifo?: boolean): string {
-    const topic: Topic = {
-      name: topicName,
-      isFifo: isFifo,
-      exchangeType: ExchangeType.Fanout,
-    };
+  getInternalTopicName(topic: Topic): string {
     return this.getTopicName(topic) || "";
   }
 
-  getConsumingQueues(): Queue[] {
+  getQueues(): Queue[] {
     const queues: Queue[] = [];
     this.queues.forEach((queue) => {
       queues.push(queue);
     });
     return queues;
+  }
+
+  getQueueReference(topic: Topic): string {
+    return this.getQueueArn(this.getQueueName(topic));
+  }
+
+  getInternalQueueName(topic: Topic): string {
+    return this.getQueueName(topic);
   }
 }

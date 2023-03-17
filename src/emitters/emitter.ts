@@ -79,13 +79,19 @@ export class Emitter implements IEmitter {
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();
   }
-  getTopicReference(topicName: string, isFifo?: boolean): string {
-    return this.emitter.getTopicReference(topicName, isFifo) || "";
+  getTopicReference(topic: Topic): string {
+    return this.emitter.getTopicReference(topic);
   }
-  getInternalTopicName(topicName: string, isFifo?: boolean): string {
-    return this.emitter.getInternalTopicName(topicName, isFifo);
+  getInternalTopicName(topic: Topic): string {
+    return this.emitter.getInternalTopicName(topic);
   }
-  getConsumingQueues(): Queue[] {
-    return this.emitter.getConsumingQueues();
+  getQueues(): Queue[] {
+    return this.emitter.getQueues();
+  }
+  getQueueReference(topic: Topic): string {
+    return this.emitter.getQueueReference(topic);
+  }
+  getInternalQueueName(topic: Topic): string {
+    return this.emitter.getInternalQueueName(topic);
   }
 }
