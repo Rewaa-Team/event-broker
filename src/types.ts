@@ -112,8 +112,8 @@ export interface Topic {
 
   /**
    * Topic level DLQ specification
-   *
-   * By default, the value will be whatever is in IEmitterOptions
+   * 
+   * Set to true to create a corresponding DLQ
    */
   deadLetterQueueEnabled?: boolean;
   /**
@@ -149,6 +149,10 @@ export interface Topic {
    * mapping for the lambda and consumer
    */
   filterPolicy?: { [key: string]: string[] };
+  /**
+   * Set to true to enable high throughput on FIFO queues
+   */
+  enableHighThroughput?: boolean;
 }
 
 export interface ILambdaHandler {
@@ -211,13 +215,6 @@ export interface IEmitterOptions {
    * Optional Lambda Client config used by message producer
    */
   lambdaConfig?: Lambda.ClientConfiguration;
-  /**
-   * Set to true if you want to use DLQs
-   *
-   * Every topic will have a DLQ created against it that
-   * will be used when maxRetryCount is exceeded for a topic
-   */
-  deadLetterQueueEnabled?: boolean;
   /**
    * Use this to force load topics from external clients
    */

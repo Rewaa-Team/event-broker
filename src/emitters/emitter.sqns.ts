@@ -147,10 +147,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createQueue(topic: Topic) {
-    if (
-      this.options.deadLetterQueueEnabled &&
-      topic.deadLetterQueueEnabled !== false
-    ) {
+    if (topic.deadLetterQueueEnabled) {
       const queueName = this.getQueueName(topic, true);
       await this.sqsProducer.createQueueFromTopic({
         queueName,

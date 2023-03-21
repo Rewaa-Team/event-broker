@@ -94,10 +94,14 @@ export class SQSProducer {
         ],
       })
     };
-    if (!isDLQ && topic.deadLetterQueueEnabled !== false) {
+    if (!isDLQ && topic.deadLetterQueueEnabled) {
       queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":\"${
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
+    }
+    if(topic.enableHighThroughput) {
+      queueAttributes.DeduplicationScope = 'messageGroup';
+      queueAttributes.FifoThroughputLimit = 'perMessageGroupId';
     }
     await this.createQueue(queueName, queueAttributes);
   }
