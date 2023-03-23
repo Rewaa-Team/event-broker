@@ -153,6 +153,16 @@ export interface Topic {
    * Set to true to enable high throughput on FIFO queues
    */
   enableHighThroughput?: boolean;
+  /**
+   * Retention time for messages in the queue of this topic
+   * 
+   * Valid Values: An integer from 60 seconds (1 minute) to 1,209,600 seconds (14 days)
+   * 
+   * Default is 1 Day
+   * 
+   * Unit: s
+   */
+  retentionPeriod?: number;
 }
 
 export interface ILambdaHandler {
