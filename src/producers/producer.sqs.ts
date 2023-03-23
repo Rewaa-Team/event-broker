@@ -77,9 +77,10 @@ export class SQSProducer {
     let queueAttributes: Record<string, string> = {
       DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
-        isDLQ
+        topic?.retentionPeriod ||
+        (isDLQ
           ? DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD
-          : DEFAULT_MESSAGE_RETENTION_PERIOD
+          : DEFAULT_MESSAGE_RETENTION_PERIOD)
       }`,
       Policy: JSON.stringify({
         Statement: [
@@ -92,16 +93,16 @@ export class SQSProducer {
             Action: "sqs:SendMessage",
           },
         ],
-      })
+      }),
     };
     if (!isDLQ && topic.deadLetterQueueEnabled) {
       queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":\"${
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
     }
-    if(topic.enableHighThroughput) {
-      queueAttributes.DeduplicationScope = 'messageGroup';
-      queueAttributes.FifoThroughputLimit = 'perMessageGroupId';
+    if (topic.enableHighThroughput) {
+      queueAttributes.DeduplicationScope = "messageGroup";
+      queueAttributes.FifoThroughputLimit = "perMessageGroupId";
     }
     await this.createQueue(queueName, queueAttributes);
   }
@@ -115,7 +116,9 @@ export class SQSProducer {
       AttributeNames: attributes,
     };
     try {
-      const { Attributes } = await this.sqs.getQueueAttributes(params).promise();
+      const { Attributes } = await this.sqs
+        .getQueueAttributes(params)
+        .promise();
       return Attributes;
     } catch (error) {
       Logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
