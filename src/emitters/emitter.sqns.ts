@@ -305,6 +305,7 @@ export class SqnsEmitter implements IEmitter {
         messageGroupId: options?.partitionKey || topic.name,
         eventName: topic.name,
         data: args,
+        messageAttributes: options?.MessageAttributes
       },
       {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
