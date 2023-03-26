@@ -29,6 +29,7 @@ export class SQSProducer {
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
       MessageAttributes: {
+        ...(message.messageAttributes || {}),
         ContentType: {
           DataType: "String",
           StringValue: "JSON",

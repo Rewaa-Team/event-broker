@@ -6,6 +6,7 @@ export interface ISQSMessage {
   data: any;
   eventName: string;
   messageGroupId?: string;
+  messageAttributes?: { [key: string]: IMessageAttributes };
 }
 
 export interface ISQSMessageOptions {
