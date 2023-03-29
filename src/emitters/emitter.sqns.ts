@@ -110,20 +110,13 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(this.options.defaultQueueOptions.fifo.name, {
       ...this.options.defaultQueueOptions.fifo,
       isDefaultQueue: true,
-      exchangeType: ExchangeType.Fanout,
+      exchangeType: ExchangeType.Queue,
     });
     this.topics.set(this.options.defaultQueueOptions.standard.name, {
       ...this.options.defaultQueueOptions.standard,
       isDefaultQueue: true,
-      exchangeType: ExchangeType.Fanout,
+      exchangeType: ExchangeType.Queue,
     });
-  }
-
-  private isDefaultQueue(name: string): boolean {
-    return (
-      name === this.options.defaultQueueOptions?.fifo.name ||
-      name === this.options.defaultQueueOptions?.standard.name
-    );
   }
 
   private async createTopic(topic: Topic) {
@@ -210,33 +203,27 @@ export class SqnsEmitter implements IEmitter {
     const queues = Array.from(this.queues, ([_, value]) => {
       return value;
     });
-    for (let i = 0; i < queues.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
-      const chunk = queues.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
-      for (const queue of chunk) {
-        if (queue.topic.exchangeType === ExchangeType.Queue) {
-          continue;
-        }
-        const queueArn = this.getQueueArn(this.getQueueName(queue.topic));
-        const topicArn = this.getTopicArn(this.getTopicName(queue.topic));
-        if (this.isDefaultQueue(queue.name)) {
-          continue;
-        }
-        if (!queueArn || !topicArn) {
-          Logger.warn(
-            `Skipping subscription for topic: ${queue.topic.name}. Topic ARN: ${topicArn} Queue ARN: ${queueArn}`
+    for (const queue of queues) {
+      const queueTopics = queue.allTopics;
+      for (let i = 0; i < queueTopics.length; i += TOPIC_SUBSCRIBE_CHUNK_SIZE) {
+        const chunk = queueTopics.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
+        for (const topic of chunk) {
+          if (topic.exchangeType === ExchangeType.Queue) {
+            continue;
+          }
+          const queueArn = this.getQueueArn(this.getQueueName(topic));
+          const topicArn = this.getTopicArn(this.getTopicName(topic));
+          subscriptionPromises.push(
+            this.snsProducer.subscribeToTopic(
+              topicArn,
+              queueArn,
+              topic.filterPolicy
+            )
           );
-          continue;
         }
-        subscriptionPromises.push(
-          this.snsProducer.subscribeToTopic(
-            topicArn,
-            queueArn,
-            queue.topic.filterPolicy
-          )
-        );
+        await Promise.all(subscriptionPromises);
+        subscriptionPromises = [];
       }
-      await Promise.all(subscriptionPromises);
-      subscriptionPromises = [];
     }
     Logger.info(`Topic subscription complete`);
   }
@@ -485,8 +472,11 @@ export class SqnsEmitter implements IEmitter {
         isDLQ: false,
         listenerIsLambda: !!topic.lambdaHandler,
         topic,
+        allTopics: [topic]
       };
       this.queues.set(queueName, queue);
+    } else {
+      this.queues.get(queueName)?.allTopics.push(topic);
     }
   }
 
