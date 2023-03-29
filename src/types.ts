@@ -81,6 +81,7 @@ export interface Queue {
   batchSize?: number;
   listenerIsLambda?: boolean;
   topic: Topic;
+  allTopics: Topic[];
 }
 
 export interface Topic {
