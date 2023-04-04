@@ -7,6 +7,7 @@ import {
   DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MAX_RETRIES,
+  DEFAULT_VISIBILITY_TIMEOUT,
 } from "../constants";
 
 export class SQSProducer {
@@ -76,6 +77,9 @@ export class SQSProducer {
   }) {
     const { queueName, topic, isDLQ, queueArn, dlqArn } = params;
     let queueAttributes: Record<string, string> = {
+      VisibilityTimeout: `${
+        topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT
+      }`,
       DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
         topic?.retentionPeriod ||

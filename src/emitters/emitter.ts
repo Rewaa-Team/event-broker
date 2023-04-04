@@ -3,7 +3,6 @@ import { EventEmitter } from "events";
 import {
   ConsumeOptions,
   EventListener,
-  ExchangeType,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
