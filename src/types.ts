@@ -228,10 +228,6 @@ export interface IEmitterOptions {
    */
   lambdaConfig?: Lambda.ClientConfiguration;
   /**
-   * Use this to force load topics from external clients
-   */
-  refreshTopicsCache?: boolean;
-  /**
    * Optional default queues options when consuming on a default queue
    *
    * When using default queues, Topics for which a separateConsumerGroup
