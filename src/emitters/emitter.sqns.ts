@@ -23,6 +23,8 @@ import {
   ConsumeOptions,
   ISNSReceiveMessage,
   ExchangeType,
+  ProcessMessageOptions,
+  MessageDeleteOptions,
 } from "../types";
 import { Logger } from "../utils/utils";
 import { Message } from "@aws-sdk/client-sqs";
@@ -292,7 +294,7 @@ export class SqnsEmitter implements IEmitter {
         messageGroupId: options?.partitionKey || topic.name,
         eventName: topic.name,
         data: args,
-        messageAttributes: options?.MessageAttributes
+        messageAttributes: options?.MessageAttributes,
       },
       {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
@@ -400,13 +402,20 @@ export class SqnsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
-  private handleMessageReceipt = async (message: Message, queueUrl: string) => {
+  private handleMessageReceipt = async (
+    message: Message,
+    queueUrl: string,
+    deleteOptions?: MessageDeleteOptions
+  ) => {
     const key = v4();
     Logger.info(
       `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
     );
     const messageConsumptionStartTime = new Date();
     await this.onMessageReceived(message, queueUrl);
+    if(deleteOptions) {
+      await this.sqsProducer.deleteMessage(deleteOptions.queueUrl, deleteOptions.receiptHandle);
+    }
     const messageConsumptionEndTime = new Date();
     const difference =
       messageConsumptionEndTime.getTime() -
@@ -472,7 +481,7 @@ export class SqnsEmitter implements IEmitter {
         isDLQ: false,
         listenerIsLambda: !!topic.lambdaHandler,
         topic,
-        allTopics: [topic]
+        allTopics: [topic],
       };
       this.queues.set(queueName, queue);
     } else {
@@ -525,11 +534,36 @@ export class SqnsEmitter implements IEmitter {
 
   async processMessage(
     message: SQS.Message,
-    topicReference?: string | undefined
+    options?: ProcessMessageOptions
   ): Promise<void> {
+    /**
+     * The lambda interface provides keys with camel case 
+     * but the SQS.Message type has Pascal case
+     */
+    if(!message.Body) {
+      message.Body = (message as any).body;
+    }
+    if(!message.ReceiptHandle) {
+      message.ReceiptHandle = (message as any).receiptHandle;
+    }
+    if(!message.MessageAttributes) {
+      message.MessageAttributes = (message as any).messageAttributes;
+    }
+    let deleteOptions: MessageDeleteOptions | undefined;
+    if(options?.shouldDeleteMessage) {
+      const queueUrl = message.MessageAttributes?.QueueUrl.StringValue || (message.MessageAttributes?.QueueUrl as any).stringValue;
+      if(!queueUrl) {
+        throw new Error(`QueueUrl not found in the message attributes`);
+      }
+      deleteOptions = {
+        queueUrl,
+        receiptHandle: message.ReceiptHandle!
+      }
+    }
     return await this.handleMessageReceipt(
       message as Message,
-      topicReference || CUSTOM_HANDLER_NAME
+      message.Attributes?.QueueUrl || CUSTOM_HANDLER_NAME,
+      deleteOptions
     );
   }
 
