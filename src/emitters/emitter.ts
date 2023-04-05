@@ -6,6 +6,7 @@ import {
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
+  ProcessMessageOptions,
   Queue,
   Topic,
 } from "../types";
@@ -71,9 +72,9 @@ export class Emitter implements IEmitter {
   }
   async processMessage(
     message: SQS.Message,
-    topicReference?: string | undefined
+    options?: ProcessMessageOptions
   ): Promise<void> {
-    return await this.emitter.processMessage(message, topicReference);
+    return await this.emitter.processMessage(message, options);
   }
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();

@@ -284,11 +284,11 @@ export interface IEmitter {
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
    * @param message The message received from topic
-   * @param topicReference Optional topic reference for logging purposes
+   * @param options ProcessMessageOptions
    */
   processMessage(
     message: SQS.Message,
-    topicReference?: string | undefined
+    options?: ProcessMessageOptions
   ): Promise<void>;
   /**
    * @param topic A Topic object
@@ -370,4 +370,22 @@ export interface ICreateQueueLambdaEventSourceInput {
 export enum ExchangeType {
   Queue = "Queue",
   Fanout = "Fanout",
+}
+
+export interface MessageDeleteOptions {
+  /**
+   * The unique ReceiptHandle of the message to delete
+   */
+  receiptHandle: string;
+  /**
+   * The url of the queue from which the message is received
+   */
+  queueUrl: string;
+}
+
+export interface ProcessMessageOptions {
+  /**
+   * Set to true if you want to delete the message after processing
+   */
+  shouldDeleteMessage?: boolean;
 }

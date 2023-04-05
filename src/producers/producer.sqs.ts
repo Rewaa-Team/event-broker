@@ -35,6 +35,10 @@ export class SQSProducer {
           DataType: "String",
           StringValue: "JSON",
         },
+        QueueUrl: {
+          DataType: "String",
+          StringValue: queueUrl,
+        },
       },
     };
 
@@ -105,9 +109,17 @@ export class SQSProducer {
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
     }
-    if (topic.enableHighThroughput) {
+    if (topic.enableHighThroughput && this.isFifoQueue(queueName)) {
       queueAttributes.DeduplicationScope = "messageGroup";
       queueAttributes.FifoThroughputLimit = "perMessageGroupId";
+    } else {
+      queueAttributes.DeduplicationScope = "queue";
+      queueAttributes.FifoThroughputLimit = "perQueue";
+    }
+    const queueUrl = await this.getQueueUrl(queueName);
+    if(queueUrl) {
+      await this.setQueueAttributes(queueUrl, queueAttributes);
+      return;
     }
     await this.createQueue(queueName, queueAttributes);
   }
@@ -143,6 +155,46 @@ export class SQSProducer {
       throw error;
     }
   };
+
+  deleteMessage = async (queueUrl: string, receiptHandle: string): Promise<boolean> => {
+    const params: SQS.DeleteMessageRequest = {
+      QueueUrl: queueUrl,
+      ReceiptHandle: receiptHandle
+    };
+    try {
+      await this.sqs.deleteMessage(params).promise();
+      return true;
+    } catch (error) {
+      Logger.error(`Message deletion failed: ${queueUrl}`);
+      throw error;
+    }
+  };
+
+  getQueueUrl = async (queueName: string): Promise<string | undefined> => {
+    const params: SQS.GetQueueUrlRequest = {
+      QueueName: queueName
+    };
+    try {
+      const result = await this.sqs.getQueueUrl(params).promise();
+      return result.QueueUrl;
+    } catch (error) {
+      Logger.error(`getQueueUrl failed for queue name: ${queueName}`);
+      throw error;
+    }
+  }
+
+  setQueueAttributes = async (queueUrl: string, attributes: Record<string, string>) => {
+    const params: SQS.SetQueueAttributesRequest = {
+      QueueUrl: queueUrl,
+      Attributes: attributes
+    };
+    try {
+      await this.sqs.setQueueAttributes(params).promise();
+    } catch (error) {
+      Logger.error(`setQueueAttributes failed for queueUrl: ${queueUrl}`);
+      throw error;
+    }
+  }
 
   isFifoQueue = (queueUrl: string) => queueUrl.includes(".fifo");
 }
