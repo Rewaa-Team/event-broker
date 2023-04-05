@@ -178,8 +178,8 @@ export class SQSProducer {
       const result = await this.sqs.getQueueUrl(params).promise();
       return result.QueueUrl;
     } catch (error) {
-      Logger.error(`getQueueUrl failed for queue name: ${queueName}`);
-      throw error;
+      Logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
+      return undefined;
     }
   }
 
