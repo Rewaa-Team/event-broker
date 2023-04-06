@@ -109,12 +109,14 @@ export class SQSProducer {
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
     }
-    if (topic.enableHighThroughput && this.isFifoQueue(queueName)) {
-      queueAttributes.DeduplicationScope = "messageGroup";
-      queueAttributes.FifoThroughputLimit = "perMessageGroupId";
-    } else {
-      queueAttributes.DeduplicationScope = "queue";
-      queueAttributes.FifoThroughputLimit = "perQueue";
+    if(this.isFifoQueue(queueName)) {
+      if (topic.enableHighThroughput) {
+        queueAttributes.DeduplicationScope = "messageGroup";
+        queueAttributes.FifoThroughputLimit = "perMessageGroupId";
+      } else {
+        queueAttributes.DeduplicationScope = "queue";
+        queueAttributes.FifoThroughputLimit = "perQueue";
+      }
     }
     const queueUrl = await this.getQueueUrl(queueName);
     if(queueUrl) {
