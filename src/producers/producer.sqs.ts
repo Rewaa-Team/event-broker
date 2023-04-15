@@ -1,7 +1,6 @@
 import { SQS } from "aws-sdk";
 import { ISQSMessage, ISQSMessageOptions, Queue, Topic } from "../types";
 import { Logger } from "../utils/utils";
-import { v4 } from "uuid";
 import {
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD,
@@ -9,6 +8,7 @@ import {
   DEFAULT_MAX_RETRIES,
   DEFAULT_VISIBILITY_TIMEOUT,
 } from "../constants";
+import { v4 } from "uuid";
 
 export class SQSProducer {
   private readonly sqs: SQS;
@@ -43,7 +43,7 @@ export class SQSProducer {
     };
 
     if (this.isFifoQueue(queueUrl)) {
-      params.MessageDeduplicationId = v4();
+      params.MessageDeduplicationId = message.deduplicationId || v4();
       params.MessageGroupId = message.messageGroupId;
     }
 
@@ -108,6 +108,8 @@ export class SQSProducer {
       queueAttributes.RedrivePolicy = `{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":\"${
         topic.maxRetryCount || DEFAULT_MAX_RETRIES
       }\"}`;
+    } else {
+      queueAttributes.RedrivePolicy = '';
     }
     if(this.isFifoQueue(queueName)) {
       if (topic.enableHighThroughput) {
