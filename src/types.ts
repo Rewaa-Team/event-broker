@@ -7,6 +7,7 @@ export interface ISQSMessage {
   eventName: string;
   messageGroupId?: string;
   messageAttributes?: { [key: string]: IMessageAttributes };
+  deduplicationId?: string;
 }
 
 export interface ISQSMessageOptions {
@@ -61,6 +62,12 @@ export interface IEmitOptions {
    * Message attributes to be sent along with the message
    */
   MessageAttributes?: { [key: string]: IMessageAttributes };
+   /**
+   * Set to a unique id if you want to avoid duplications in
+   * a FIFO queue. The same deduplicationId sent within a 5
+   * minite interval will be discarded.
+   */
+   deduplicationId?: string;
 }
 
 export interface IFailedEventMessage {
@@ -123,8 +130,10 @@ export interface Topic {
    *
    * Set if you want to use a separate consumer group
    *
-   * When specified, messages emitted to this Topic will be received by
-   * this specific consumer group only
+   * Used to identify the queue from which the consumer 
+   * will consume the messages from this topic. When not provided,
+   * the broker will subscribe the default queue to this topic. If 
+   * the default queue is not specified, an error will be thrown
    */
   separateConsumerGroup?: string;
   /**
@@ -346,6 +355,7 @@ export interface ISNSMessage {
   eventName: string;
   messageGroupId?: string;
   messageAttr?: { [key: string]: IMessageAttributes };
+  deduplicationId?: string;
 }
 
 export interface ISNSReceiveMessage {

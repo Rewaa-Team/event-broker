@@ -277,6 +277,7 @@ export class SqnsEmitter implements IEmitter {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
       messageAttr: options?.MessageAttributes,
+      deduplicationId: options?.deduplicationId,
       data: args,
     });
     return true;
@@ -295,6 +296,7 @@ export class SqnsEmitter implements IEmitter {
         eventName: topic.name,
         data: args,
         messageAttributes: options?.MessageAttributes,
+        deduplicationId: options?.deduplicationId
       },
       {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,

@@ -26,7 +26,7 @@ export class SNSProducer {
         };
 
         if (this.isFifoTopic(topicArn)) {
-            params.MessageDeduplicationId = v4();
+            params.MessageDeduplicationId = message.deduplicationId || v4();
             params.MessageGroupId = messageGroupId;
         }
 
