@@ -1,6 +1,6 @@
 {
   "name": "@rewaa/event-broker",
-  "version": "3.2.10",
+  "version": "3.3.0",
   "description": "A broker for all the events that Rewaa will ever produce or consume",
   "main": "dist/index.js",
   "scripts": {
@@ -30,6 +30,8 @@
     "@types/node": "^18.11.18"
   },
   "peerDependencies": {
-    "aws-sdk": "^2.1055.0"
+    "@aws-sdk/client-sqs": "^3.188.0",
+    "@aws-sdk/client-sns": "^3.188.0",
+    "@aws-sdk/client-lambda": "^3.188.0"
   }
 }

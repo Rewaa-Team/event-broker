@@ -1,6 +1,8 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { SQS, SNS, Lambda } from "aws-sdk";
+import { SQSClientConfig, Message } from "@aws-sdk/client-sqs";
+import { SNSClientConfig } from "@aws-sdk/client-sns";
+import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
 export interface ISQSMessage {
   data: any;
@@ -62,12 +64,12 @@ export interface IEmitOptions {
    * Message attributes to be sent along with the message
    */
   MessageAttributes?: { [key: string]: IMessageAttributes };
-   /**
+  /**
    * Set to a unique id if you want to avoid duplications in
    * a FIFO queue. The same deduplicationId sent within a 5
    * minite interval will be discarded.
    */
-   deduplicationId?: string;
+  deduplicationId?: string;
 }
 
 export interface IFailedEventMessage {
@@ -121,7 +123,7 @@ export interface Topic {
 
   /**
    * Topic level DLQ specification
-   * 
+   *
    * Set to true to create a corresponding DLQ
    */
   deadLetterQueueEnabled?: boolean;
@@ -130,9 +132,9 @@ export interface Topic {
    *
    * Set if you want to use a separate consumer group
    *
-   * Used to identify the queue from which the consumer 
+   * Used to identify the queue from which the consumer
    * will consume the messages from this topic. When not provided,
-   * the broker will subscribe the default queue to this topic. If 
+   * the broker will subscribe the default queue to this topic. If
    * the default queue is not specified, an error will be thrown
    */
   separateConsumerGroup?: string;
@@ -166,11 +168,11 @@ export interface Topic {
   enableHighThroughput?: boolean;
   /**
    * Retention time for messages in the queue of this topic
-   * 
+   *
    * Valid Values: An integer from 60 seconds (1 minute) to 1,209,600 seconds (14 days)
-   * 
+   *
    * Default is 1 Day
-   * 
+   *
    * Unit: s
    */
   retentionPeriod?: number;
@@ -227,15 +229,15 @@ export interface IEmitterOptions {
   /**
    * Optional SQS Client config used by message producer
    */
-  sqsConfig?: SQS.ClientConfiguration;
+  sqsConfig?: SQSClientConfig;
   /**
    * Optional SNS Client config used by message producer
    */
-  snsConfig?: SNS.ClientConfiguration;
+  snsConfig?: SNSClientConfig;
   /**
    * Optional Lambda Client config used by message producer
    */
-  lambdaConfig?: Lambda.ClientConfiguration;
+  lambdaConfig?: LambdaClientConfig;
   /**
    * Optional default queues options when consuming on a default queue
    *
@@ -296,7 +298,7 @@ export interface IEmitter {
    * @param options ProcessMessageOptions
    */
   processMessage(
-    message: SQS.Message,
+    message: Message,
     options?: ProcessMessageOptions
   ): Promise<void>;
   /**

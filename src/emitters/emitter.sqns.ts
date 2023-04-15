@@ -27,9 +27,9 @@ import {
   MessageDeleteOptions,
 } from "../types";
 import { Logger } from "../utils/utils";
+import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from "@aws-sdk/client-sqs";
-import { SNS, SQS } from "aws-sdk";
-import { Lambda } from "aws-sdk";
+import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
@@ -78,7 +78,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createEventSourceMappings() {
-    const promises: Promise<Lambda.EventSourceMappingConfiguration | void>[] =
+    const promises: Promise<EventSourceMappingConfiguration | void>[] =
       [];
     const uniqueQueueMap: Map<string, boolean> = new Map();
     this.topics.forEach((topic) => {
@@ -201,7 +201,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async subscribeToTopics() {
-    let subscriptionPromises: Promise<SNS.SubscribeResponse>[] = [];
+    let subscriptionPromises: Promise<SubscribeResponse>[] = [];
     const queues = Array.from(this.queues, ([_, value]) => {
       return value;
     });
@@ -535,7 +535,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async processMessage(
-    message: SQS.Message,
+    message: Message,
     options?: ProcessMessageOptions
   ): Promise<void> {
     /**
