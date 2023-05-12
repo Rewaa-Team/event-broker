@@ -3,9 +3,13 @@ import { EventEmitter } from "events";
 import {
   ConsumeOptions,
   EventListener,
+  ExchangeType,
+  IBatchEmitOptions,
+  IBatchMessage,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
+  IFailedBatchMessage,
   ProcessMessageOptions,
   Queue,
   Topic,
@@ -38,9 +42,19 @@ export class Emitter implements IEmitter {
     ...args: any[]
   ): Promise<boolean> {
     if (this.options.useExternalBroker) {
-      return !!(await this.emitter.emit(eventName, options, ...args));
+      return await this.emitter.emit(eventName, options, ...args);
     }
     return false;
+  }
+  async emitBatch(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): Promise<IFailedBatchMessage[]> {
+    if (this.options.useExternalBroker) {
+      return await this.emitter.emitBatch(eventName, messages, options);
+    }
+    return [];
   }
   emitLocal(eventName: string, ...args: any[]) {
     return this.localEmitter.emit(eventName, ...args);

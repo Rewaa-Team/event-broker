@@ -50,6 +50,31 @@ export class SQSProducer {
     return await this.sqs.sendMessage(params).promise();
   };
 
+  sendBatch = async (
+    queueUrl: string,
+    messages: ISQSMessage[],
+    messageOptions: ISQSMessageOptions
+  ): Promise<SQS.SendMessageBatchResult> => {
+    const isFifo = this.isFifoQueue(queueUrl);
+    const params: SQS.SendMessageBatchRequest = {
+      Entries: messages.map((message) => {
+        return {
+          Id: message.id!,
+          DelaySeconds: messageOptions.delay,
+          MessageAttributes: message.messageAttributes,
+          MessageBody: JSON.stringify(message),
+          ...(isFifo && {
+            MessageDeduplicationId: message.deduplicationId || v4(),
+            MessageGroupId: message.messageGroupId,
+          }),
+        }
+      }),
+      QueueUrl: queueUrl
+    }
+
+    return await this.sqs.sendMessageBatch(params).promise();
+  };
+
   createQueue = async (
     queueName: string,
     attributes: Record<string, string>
@@ -200,5 +225,5 @@ export class SQSProducer {
     }
   }
 
-  isFifoQueue = (queueUrl: string) => queueUrl.includes(".fifo");
+  private isFifoQueue = (queueUrl: string) => queueUrl.includes(".fifo");
 }
