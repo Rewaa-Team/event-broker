@@ -101,6 +101,6 @@ export class SNSProducer {
       throw error;
     }
   };
-
-  private isFifoTopic = (topicArn: string) => topicArn.includes(".fifo");
+  
+  isFifoTopic = (topicArn: string) => topicArn.includes(".fifo");
 }

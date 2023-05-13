@@ -84,7 +84,11 @@ export type IBatchMessage = Omit<IEmitOptions, 'isFifo' | 'exchangeType' | 'cons
   id: string
 };
 
-export interface IFailedBatchMessage {
+export interface IFailedEmitBatchMessage {
+  /**
+   * The batch-level unique id of the failed message
+   */
+  id: string;
   /**
    * An error code representing why the message failed
    */
@@ -97,6 +101,12 @@ export interface IFailedBatchMessage {
    * A boolean indicating wether the message failed due to sender
    */
   wasSenderFault?: boolean;
+}
+
+export interface IFailedConsumerMessages {
+  batchItemFailures: {
+    itemIdentifier: string;
+  }[];
 }
 
 export interface IFailedEventMessage {
@@ -229,6 +239,7 @@ export interface IEmitterOptions {
    * Unit: ms
    *
    * Default: 60000ms
+   * @deprecated Will be removed in future versions
    */
   maxProcessingTime?: number;
   /**
@@ -320,7 +331,7 @@ export interface IEmitter {
     eventName: string,
     messages: IBatchMessage[],
     options?: IBatchEmitOptions,
-  ): Promise<IFailedBatchMessage[]>;
+  ): Promise<IFailedEmitBatchMessage[]>;
   on<T>(
     eventName: string,
     listener: EventListener<T>,
@@ -331,6 +342,7 @@ export interface IEmitter {
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
+   * This function throws if the consumer function fails
    * @param message The message received from topic
    * @param options ProcessMessageOptions
    */
@@ -338,6 +350,19 @@ export interface IEmitter {
     message: SQS.Message,
     options?: ProcessMessageOptions
   ): Promise<void>;
+  /**
+   * This function does not throw when the consumer function fails.
+   * Instead, it returns a list of failed messages as IFailedConsumerMessages
+   * @param messages A list of messages received from topic
+   * @param options ProcessMessageOptions
+   * @returns An object containing a list of the messages that failed.
+   * This object is compatible with the return type required by lambda event 
+   * source mapping and thus can be returned from the lambda directly
+   */
+  processMessages(
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages>
   /**
    * @param topic A Topic object
    *
@@ -431,4 +456,11 @@ export interface ProcessMessageOptions {
    * Set to true if you want to delete the message after processing
    */
   shouldDeleteMessage?: boolean;
+  /**
+   * The queue ARN from which the message is received.
+   * In case of Lambda, the received messages have the eventSourceARN,
+   * so this property is optional. In all other cases, this must be 
+   * provided
+   */
+  queueReference?: string;
 }

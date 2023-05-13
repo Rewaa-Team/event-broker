@@ -3,13 +3,13 @@ import { EventEmitter } from "events";
 import {
   ConsumeOptions,
   EventListener,
-  ExchangeType,
   IBatchEmitOptions,
   IBatchMessage,
   IEmitOptions,
   IEmitter,
   IEmitterOptions,
-  IFailedBatchMessage,
+  IFailedConsumerMessages,
+  IFailedEmitBatchMessage,
   ProcessMessageOptions,
   Queue,
   Topic,
@@ -50,7 +50,7 @@ export class Emitter implements IEmitter {
     eventName: string,
     messages: IBatchMessage[],
     options?: IBatchEmitOptions
-  ): Promise<IFailedBatchMessage[]> {
+  ): Promise<IFailedEmitBatchMessage[]> {
     if (this.options.useExternalBroker) {
       return await this.emitter.emitBatch(eventName, messages, options);
     }
@@ -89,6 +89,12 @@ export class Emitter implements IEmitter {
     options?: ProcessMessageOptions
   ): Promise<void> {
     return await this.emitter.processMessage(message, options);
+  }
+  async processMessages(
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages> {
+    return await this.emitter.processMessages(messages, options);
   }
   async startConsumers(): Promise<void> {
     await this.emitter.startConsumers();
