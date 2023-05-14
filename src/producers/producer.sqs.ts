@@ -49,14 +49,13 @@ export class SQSProducer {
   sendBatch = async (
     queueUrl: string,
     messages: ISQSMessage[],
-    messageOptions: ISQSMessageOptions
   ): Promise<SQS.SendMessageBatchResult> => {
     const isFifo = this.isFifoQueue(queueUrl);
     const params: SQS.SendMessageBatchRequest = {
       Entries: messages.map((message) => {
         return {
           Id: message.id!,
-          DelaySeconds: messageOptions.delay,
+          DelaySeconds: message.delay,
           MessageAttributes: this.getMessageAttributes(queueUrl, message),
           MessageBody: JSON.stringify(message),
           ...(isFifo && {

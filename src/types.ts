@@ -9,6 +9,7 @@ export interface IMessage {
   messageAttributes?: { [key: string]: IMessageAttributes };
   deduplicationId?: string;
   id?: string;
+  delay?: number;
 }
 
 export type ISQSMessage = IMessage;
@@ -73,7 +74,7 @@ export interface IEmitOptions {
   deduplicationId?: string;
 }
 
-export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup' | 'delay'>;
+export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'>;
 
 export type IBatchMessage = Omit<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'> & {
   data: any;

@@ -366,8 +366,7 @@ export class SqnsEmitter implements IEmitter {
 
   async emitBatchToQueue(
     topic: Topic,
-    messages: IBatchMessage[],
-    options?: IBatchEmitOptions
+    messages: IBatchMessage[]
   ): Promise<IFailedEmitBatchMessage[]> {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
@@ -379,12 +378,10 @@ export class SqnsEmitter implements IEmitter {
           eventName: topic.name,
           messageAttributes: message.MessageAttributes,
           messageGroupId: message.partitionKey || topic.name,
+          delay: message.delay || DEFAULT_MESSAGE_DELAY,
           id: message.id,
         };
-      }),
-      {
-        delay: options?.delay || DEFAULT_MESSAGE_DELAY,
-      }
+      })
     );
     return result.Failed.map((failed) => ({
       id: failed.Id,
@@ -407,7 +404,7 @@ export class SqnsEmitter implements IEmitter {
         separateConsumerGroup: options?.consumerGroup,
       };
       if (topic.exchangeType === ExchangeType.Queue) {
-        return await this.emitBatchToQueue(topic, messages, options);
+        return await this.emitBatchToQueue(topic, messages);
       }
       return await this.emitBatchToTopic(topic, messages);
     } catch (error) {
