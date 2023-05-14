@@ -7,6 +7,14 @@ This package is intended to abstract out the functionality of an event broker ke
 
 For now, the underlying client is SNS+SQS. So this package requires AWS and is limited in functionality by the quotas for SNS and SQS respectively.
 
+# Features
+- Multiple exchange types: **Fanout** and **Queue**
+- Dead Letter Queues
+- Batch emit/consume
+- Updates for topic properties like retention period, high throughput etc.
+- Serverless support
+- Localstack support
+
 # Supported Exchange Types
 
 The broker supports 2 exchange types currently:
@@ -172,7 +180,20 @@ The deployment of resources created by the broker is a separate process extracte
 This method takes an optional array of topics which can be useful for serverless case where we might not have attached the consumer by calling the `on` method.
 if you have called the `on` method on the emitter object for all the topics before calling `bootstrap`, then the topics array is not required.
 
-`bootsrap` can be called only once during deployment. The APIs used internally are idempotent so providing the same topics won't create duplicate resources. However currently, updates are not supported, so updating an attribute of the topic like retention period won't change anything. This is part of the roadmap.
+`bootsrap` can be called only once during deployment. The APIs used internally are idempotent so providing the same topics won't create duplicate resources.
+
+## Updating Topic Properties
+Following table shows which properties are automatically updated when bootstrapping if changed in a topic:
+
+| Property  | Updated |
+| ------------- | ------------- |
+| visibilityTimeout  | Yes  |
+| batchSize  | Yes  |
+| maxRetryCount  | Yes  |
+| deadLetterQueueEnabled  | Yes, only attaches/detaches the DLQ. Doesn't delete it|
+| separateConsumerGroup  | Yes, creates a new queue. Old one is not deleted  |
+| enableHighThroughput  | Yes  |
+| retentionPeriod  | Yes  |
 
 # Roadmap
 
