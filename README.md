@@ -178,4 +178,4 @@ if you have called the `on` method on the emitter object for all the topics befo
 
 The following things are part of the roadmap for the broker:
 
- - Schema Registry: Adding a layer for registering topics and providing validations for 		schema. This will also help in eliminating the options that are required to be provided while emitting using `emit` or attaching a consumer using `on`. The registration part can be part of the deployment phase.
+- Schema Registry: Adding a layer for registering topics and providing validations for 		schema. This will also help in eliminating the options that are required to be provided while emitting using `emit` or attaching a consumer using `on`. The registration part can be part of the deployment phase.

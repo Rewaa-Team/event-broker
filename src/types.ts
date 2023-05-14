@@ -2,13 +2,17 @@ import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import { SQS, SNS, Lambda } from "aws-sdk";
 
-export interface ISQSMessage {
+export interface IMessage {
   data: any;
   eventName: string;
   messageGroupId?: string;
   messageAttributes?: { [key: string]: IMessageAttributes };
   deduplicationId?: string;
+  id?: string;
+  delay?: number;
 }
+
+export type ISQSMessage = IMessage;
 
 export interface ISQSMessageOptions {
   delay: number;
@@ -67,7 +71,43 @@ export interface IEmitOptions {
    * a FIFO queue. The same deduplicationId sent within a 5
    * minite interval will be discarded.
    */
-   deduplicationId?: string;
+  deduplicationId?: string;
+}
+
+export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'>;
+
+export type IBatchMessage = Omit<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'> & {
+  data: any;
+  /**
+   * A batch-level unique id. Used for reporting the result
+   * of the batch api
+   */
+  id: string
+};
+
+export interface IFailedEmitBatchMessage {
+  /**
+   * The batch-level unique id of the failed message
+   */
+  id: string;
+  /**
+   * An error code representing why the message failed
+   */
+  code: string;
+  /**
+   * An optional message explaining the failure
+   */
+  message?: string;
+  /**
+   * A boolean indicating wether the message failed due to sender
+   */
+  wasSenderFault?: boolean;
+}
+
+export interface IFailedConsumerMessages {
+  batchItemFailures: {
+    itemIdentifier: string;
+  }[];
 }
 
 export interface IFailedEventMessage {
@@ -200,6 +240,7 @@ export interface IEmitterOptions {
    * Unit: ms
    *
    * Default: 60000ms
+   * @deprecated Will be removed in future versions
    */
   maxProcessingTime?: number;
   /**
@@ -282,6 +323,16 @@ export interface IEmitter {
     options?: IEmitOptions,
     ...args: any[]
   ): Promise<boolean>;
+  /**
+   * @param eventName Name of the topic/event to emit in batch
+   * @param messages A list of max 10 messages to send as a batch
+   * @param options Optional batch emit options
+   */
+  emitBatch(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions,
+  ): Promise<IFailedEmitBatchMessage[]>;
   on<T>(
     eventName: string,
     listener: EventListener<T>,
@@ -292,6 +343,7 @@ export interface IEmitter {
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
+   * This function throws if the consumer function fails
    * @param message The message received from topic
    * @param options ProcessMessageOptions
    */
@@ -299,6 +351,19 @@ export interface IEmitter {
     message: SQS.Message,
     options?: ProcessMessageOptions
   ): Promise<void>;
+  /**
+   * This function does not throw when the consumer function fails.
+   * Instead, it returns a list of failed messages as IFailedConsumerMessages
+   * @param messages A list of messages received from topic
+   * @param options ProcessMessageOptions
+   * @returns An object containing a list of the messages that failed.
+   * This object is compatible with the return type required by lambda event 
+   * source mapping and thus can be returned from the lambda directly
+   */
+  processMessages(
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages>
   /**
    * @param topic A Topic object
    *
@@ -350,13 +415,7 @@ export interface IEmitter {
   startConsumers(): Promise<void>;
 }
 
-export interface ISNSMessage {
-  data: any;
-  eventName: string;
-  messageGroupId?: string;
-  messageAttr?: { [key: string]: IMessageAttributes };
-  deduplicationId?: string;
-}
+export type ISNSMessage =  IMessage;
 
 export interface ISNSReceiveMessage {
   Message: string;
@@ -398,4 +457,11 @@ export interface ProcessMessageOptions {
    * Set to true if you want to delete the message after processing
    */
   shouldDeleteMessage?: boolean;
+  /**
+   * The queue ARN from which the message is received.
+   * In case of Lambda, the received messages have the eventSourceARN,
+   * so this property is optional. In all other cases, this must be 
+   * provided
+   */
+  queueReference?: string;
 }

@@ -3,7 +3,6 @@ import { Consumer } from "sqs-consumer";
 import {
   CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
-  DEFAULT_MAX_PROCESSING_TIME,
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
@@ -25,9 +24,12 @@ import {
   ExchangeType,
   ProcessMessageOptions,
   MessageDeleteOptions,
+  IBatchMessage,
+  IBatchEmitOptions,
+  IFailedEmitBatchMessage,
+  IFailedConsumerMessages,
 } from "../types";
 import { Logger } from "../utils/utils";
-import { Message } from "@aws-sdk/client-sqs";
 import { SNS, SQS } from "aws-sdk";
 import { Lambda } from "aws-sdk";
 import { SNSProducer } from "../producers/producer.sns";
@@ -276,7 +278,7 @@ export class SqnsEmitter implements IEmitter {
     await this.snsProducer.send(topicArn, {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
-      messageAttr: options?.MessageAttributes,
+      messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
       data: args,
     });
@@ -296,7 +298,7 @@ export class SqnsEmitter implements IEmitter {
         eventName: topic.name,
         data: args,
         messageAttributes: options?.MessageAttributes,
-        deduplicationId: options?.deduplicationId
+        deduplicationId: options?.deduplicationId,
       },
       {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
@@ -334,6 +336,85 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
+  async emitBatchToTopic(
+    topic: Topic,
+    messages: IBatchMessage[]
+  ): Promise<IFailedEmitBatchMessage[]> {
+    const topicArn = this.getTopicArn(this.getTopicName(topic));
+    const result = await this.snsProducer.sendBatch(
+      topicArn,
+      messages.map((message) => {
+        return {
+          data: [message.data],
+          deduplicationId: message.deduplicationId,
+          eventName: topic.name,
+          messageAttributes: message.MessageAttributes,
+          messageGroupId: message.partitionKey || topic.name,
+          id: message.id,
+        };
+      })
+    );
+    return (
+      result.Failed?.map((failed) => ({
+        id: failed.Id,
+        code: failed.Code,
+        message: failed.Message,
+        wasSenderFault: failed.SenderFault,
+      })) || []
+    );
+  }
+
+  async emitBatchToQueue(
+    topic: Topic,
+    messages: IBatchMessage[]
+  ): Promise<IFailedEmitBatchMessage[]> {
+    const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+    const result = await this.sqsProducer.sendBatch(
+      queueUrl,
+      messages.map((message) => {
+        return {
+          data: [message.data],
+          deduplicationId: message.deduplicationId,
+          eventName: topic.name,
+          messageAttributes: message.MessageAttributes,
+          messageGroupId: message.partitionKey || topic.name,
+          delay: message.delay || DEFAULT_MESSAGE_DELAY,
+          id: message.id,
+        };
+      })
+    );
+    return result.Failed.map((failed) => ({
+      id: failed.Id,
+      code: failed.Code,
+      message: failed.Message,
+      wasSenderFault: failed.SenderFault,
+    }));
+  }
+
+  async emitBatch(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): Promise<IFailedEmitBatchMessage[]> {
+    try {
+      const topic: Topic = {
+        name: eventName,
+        isFifo: !!options?.isFifo,
+        exchangeType: options?.exchangeType || ExchangeType.Fanout,
+        separateConsumerGroup: options?.consumerGroup,
+      };
+      if (topic.exchangeType === ExchangeType.Queue) {
+        return await this.emitBatchToQueue(topic, messages);
+      }
+      return await this.emitBatchToTopic(topic, messages);
+    } catch (error) {
+      Logger.error(
+        `Batch Message producing failed: ${eventName} ${JSON.stringify(error)}`
+      );
+      throw error;
+    }
+  }
+
   async startConsumers() {
     if (this.consumersStarted) {
       return;
@@ -353,10 +434,20 @@ export class SqnsEmitter implements IEmitter {
       return;
     }
     queue.consumer = Consumer.create({
+      /**
+       * Handling delete message explcitly because sqs-consumer
+       * does not delete the successful ones if one of the message
+       * in the batch throws
+       */
+      shouldDeleteMessages: false,
       region: this.options.awsConfig?.region,
       queueUrl: queue.url,
-      handleMessage: async (message) => {
-        await this.handleMessageReceipt(message as Message, queue.url!);
+      messageAttributeNames: ["All"],
+      handleMessageBatch: async (messages) => {
+        await this.processMessages(messages as SQS.Message[], {
+          shouldDeleteMessage: true,
+          queueReference: queue.url!,
+        });
       },
       batchSize: queue.batchSize || DEFAULT_BATCH_SIZE,
       visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -405,7 +496,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private handleMessageReceipt = async (
-    message: Message,
+    message: SQS.Message,
     queueUrl: string,
     deleteOptions?: MessageDeleteOptions
   ) => {
@@ -413,20 +504,12 @@ export class SqnsEmitter implements IEmitter {
     Logger.info(
       `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
     );
-    const messageConsumptionStartTime = new Date();
     await this.onMessageReceived(message, queueUrl);
-    if(deleteOptions) {
-      await this.sqsProducer.deleteMessage(deleteOptions.queueUrl, deleteOptions.receiptHandle);
-    }
-    const messageConsumptionEndTime = new Date();
-    const difference =
-      messageConsumptionEndTime.getTime() -
-      messageConsumptionStartTime.getTime();
-    if (
-      difference >
-      (this.options.maxProcessingTime || DEFAULT_MAX_PROCESSING_TIME)
-    ) {
-      Logger.warn(`Slow message ${queueUrl}_${key}_${new Date()}`);
+    if (deleteOptions) {
+      await this.sqsProducer.deleteMessage(
+        deleteOptions.queueUrl,
+        deleteOptions.receiptHandle
+      );
     }
     Logger.info(`Message ended ${queueUrl}_${key}_${new Date()}`);
   };
@@ -491,7 +574,10 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private async onMessageReceived(receivedMessage: Message, queueUrl: string) {
+  private async onMessageReceived(
+    receivedMessage: SQS.Message,
+    queueUrl: string
+  ) {
     let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
     try {
@@ -534,36 +620,118 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
+  private async deleteMessages(
+    queueUrl: string,
+    messages: SQS.Message[],
+    results: PromiseSettledResult<any>[]
+  ): Promise<void> {
+    const receiptsToDelete: string[] = [];
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        receiptsToDelete.push(messages[index].ReceiptHandle!);
+      }
+    });
+    if(receiptsToDelete.length) {
+      await this.sqsProducer.deleteMessages(queueUrl, receiptsToDelete);
+    }
+  }
+
+  private async processFifoQueueMessages(
+    queueUrl: string,
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages> {
+    let i = 0;
+    try {
+      for (i = 0; i < messages.length; i++) {
+        await this.processMessage(messages[i], options);
+      }
+      return {
+        batchItemFailures: [],
+      };
+    } catch (error) {
+      Logger.error(
+        `Fifo queue message failed :: ${queueUrl} :: ${JSON.stringify(
+          messages[i]
+        )}`
+      );
+      return {
+        batchItemFailures: messages.slice(i, undefined).map((message) => {
+          return {
+            itemIdentifier: this.getMessageIdFromMessage(message),
+          };
+        }),
+      };
+    }
+  }
+
+  private async processStandardQueueMessages(
+    queueUrl: string,
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages> {
+    const results = await Promise.allSettled(
+      messages.map((message) => this.processMessage(message))
+    );
+    if (options?.shouldDeleteMessage) {
+      await this.deleteMessages(queueUrl, messages, results);
+    }
+    const failedMessages: SQS.Message[] = [];
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        failedMessages.push(messages[index]);
+      }
+    });
+    return {
+      batchItemFailures: failedMessages.map((message) => {
+        return {
+          itemIdentifier: this.getMessageIdFromMessage(message),
+        };
+      }),
+    };
+  }
+
+  async processMessages(
+    messages: SQS.Message[],
+    options?: ProcessMessageOptions
+  ): Promise<IFailedConsumerMessages> {
+    const queueUrl =
+      options?.queueReference || this.getQueueUrlFromMessage(messages[0]);
+    const isFifoQueue = this.sqsProducer.isFifoQueue(queueUrl);
+    if (isFifoQueue) {
+      return await this.processFifoQueueMessages(queueUrl, messages, options);
+    }
+    return await this.processStandardQueueMessages(queueUrl, messages, options);
+  }
+
   async processMessage(
     message: SQS.Message,
     options?: ProcessMessageOptions
   ): Promise<void> {
     /**
-     * The lambda interface provides keys with camel case 
+     * The lambda interface provides keys with camel case
      * but the SQS.Message type has Pascal case
      */
-    if(!message.Body) {
+    if (!message.Body) {
       message.Body = (message as any).body;
     }
-    if(!message.ReceiptHandle) {
+    if (!message.ReceiptHandle) {
       message.ReceiptHandle = (message as any).receiptHandle;
     }
-    if(!message.MessageAttributes) {
+    if (!message.MessageAttributes) {
       message.MessageAttributes = (message as any).messageAttributes;
     }
     let deleteOptions: MessageDeleteOptions | undefined;
-    if(options?.shouldDeleteMessage) {
-      const queueUrl = message.MessageAttributes?.QueueUrl.StringValue || (message.MessageAttributes?.QueueUrl as any).stringValue;
-      if(!queueUrl) {
-        throw new Error(`QueueUrl not found in the message attributes`);
-      }
+    if (options?.shouldDeleteMessage) {
+      const queueUrl =
+        options.queueReference || this.getQueueUrlFromMessage(message);
       deleteOptions = {
         queueUrl,
-        receiptHandle: message.ReceiptHandle!
-      }
+        receiptHandle: message.ReceiptHandle!,
+      };
     }
     return await this.handleMessageReceipt(
-      message as Message,
+      message,
       message.Attributes?.QueueUrl || CUSTOM_HANDLER_NAME,
       deleteOptions
     );
@@ -591,5 +759,39 @@ export class SqnsEmitter implements IEmitter {
 
   getInternalQueueName(topic: Topic): string {
     return this.getQueueName(topic);
+  }
+
+  private getQueueUrlFromMessage(message: SQS.Message): string {
+    const receivedMessage = message as any;
+    let queueUrl =
+      receivedMessage.MessageAttributes?.QueueUrl.StringValue ||
+      receivedMessage.MessageAttributes?.QueueUrl.stringValue;
+    //Message was received in a lambda
+    queueUrl =
+      queueUrl || this.getQueueUrlFromARN(receivedMessage.eventSourceARN);
+    if (!queueUrl) {
+      throw new Error(`QueueUrl or eventSourceARN not found in the message`);
+    }
+    return queueUrl;
+  }
+
+  private getQueueUrlFromARN(arn?: string): string | undefined {
+    if (!arn) return;
+    const parts = arn.split(":");
+
+    const service = parts[2];
+    const region = parts[3];
+    const accountId = parts[4];
+    const queueName = parts[5];
+
+    if (this.options.isLocal) {
+      return `${this.options.sqsConfig?.endpoint}${this.options.awsConfig?.accountId}/${queueName}`;
+    }
+    return `https://${service}.${region}.amazonaws.com/${accountId}/${queueName}`;
+  }
+
+  private getMessageIdFromMessage(message: SQS.Message): string {
+    const messageId = message.MessageId || (message as any).messageId;
+    return messageId;
   }
 }
