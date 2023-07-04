@@ -312,107 +312,115 @@ export type DefaultQueueOptions = Omit<
 export type EventListener<T> = (...args: T[]) => Promise<void>;
 
 export interface IEmitter {
-  /**
-   * Call for creation of topics and queues
-   * @param topics An optional array of topics.
-   * Only required if Emitter.on is not used
-   */
-  bootstrap(topics?: Topic[]): Promise<void>;
-  emit(
-    eventName: string,
-    options?: IEmitOptions,
-    ...args: any[]
-  ): Promise<boolean>;
-  /**
-   * @param eventName Name of the topic/event to emit in batch
-   * @param messages A list of max 10 messages to send as a batch
-   * @param options Optional batch emit options
-   */
-  emitBatch(
-    eventName: string,
-    messages: IBatchMessage[],
-    options?: IBatchEmitOptions,
-  ): Promise<IFailedEmitBatchMessage[]>;
-  on<T>(
-    eventName: string,
-    listener: EventListener<T>,
-    options?: ConsumeOptions
-  ): void;
-  removeAllListener(): void;
-  removeListener(eventName: string, listener: EventListener<any>): void;
-  /**
-   * Use this method to when you need to consume messages by yourself
-   * but use the routing logic defined in the broker.
-   * This function throws if the consumer function fails
-   * @param message The message received from topic
-   * @param options ProcessMessageOptions
-   */
-  processMessage(
-    message: SQS.Message,
-    options?: ProcessMessageOptions
-  ): Promise<void>;
-  /**
-   * This function does not throw when the consumer function fails.
-   * Instead, it returns a list of failed messages as IFailedConsumerMessages
-   * @param messages A list of messages received from topic
-   * @param options ProcessMessageOptions
-   * @returns An object containing a list of the messages that failed.
-   * This object is compatible with the return type required by lambda event 
-   * source mapping and thus can be returned from the lambda directly
-   */
-  processMessages(
-    messages: SQS.Message[],
-    options?: ProcessMessageOptions
-  ): Promise<IFailedConsumerMessages>
-  /**
-   * @param topic A Topic object
-   *
-   * To get the correct arn, the following properties should be provided
-   * if applicable
-   *
-   * name, isFifo
-   * @returns ARN of Topic that the broker generates internally
-   */
-  getTopicReference(topic: Topic): string;
-  /**
-   * @param topic A Topic object
-   *
-   * To get the correct name, the following properties should be provided
-   * if applicable
-   *
-   * name, isFifo
-   * @returns Name of Topic that the broker generates internally
-   */
-  getInternalTopicName(topic: Topic): string;
-  /**
-   * @returns An array of all the queues being consumed
-   * by the broker
-   */
-  getQueues(): Queue[];
-  /**
-   * @param topic A Topic object
-   *
-   * To get the correct queue, the following properties should be provided
-   * if applicable
-   *
-   * name, isFifo, separateConsumerGroup, exchangeType
-   * @returns The subscribed queue arn for the topic
-   */
-  getQueueReference(topic: Topic): string;
-  /**
-   * @param topic A Topic object
-   *
-   * To get the correct queue, the following properties should be provided
-   * if applicable
-   *
-   * name, isFifo, separateConsumerGroup, exchangeType
-   * @returns The subscribed queue internal name for the topic
-   */
-  getInternalQueueName(topic: Topic): string;
-  /**
-   * Start consuming the topics
-   */
-  startConsumers(): Promise<void>;
+	/**
+	 * Call for creation of topics and queues
+	 * @param topics An optional array of topics.
+	 * Only required if Emitter.on is not used
+	 */
+	bootstrap(topics?: Topic[]): Promise<void>;
+	emit(
+		eventName: string,
+		options?: IEmitOptions,
+		...args: any[]
+	): Promise<boolean>;
+	/**
+	 * @param eventName Name of the topic/event to emit in batch
+	 * @param messages A list of max 10 messages to send as a batch
+	 * @param options Optional batch emit options
+	 */
+	emitBatch(
+		eventName: string,
+		messages: IBatchMessage[],
+		options?: IBatchEmitOptions
+	): Promise<IFailedEmitBatchMessage[]>;
+	on<T>(
+		eventName: string,
+		listener: EventListener<T>,
+		options?: ConsumeOptions
+	): void;
+	removeAllListener(): void;
+	removeListener(eventName: string, listener: EventListener<any>): void;
+	/**
+	 * Use this method to when you need to consume messages by yourself
+	 * but use the routing logic defined in the broker.
+	 * This function throws if the consumer function fails
+	 * @param message The message received from topic
+	 * @param options ProcessMessageOptions
+	 */
+	processMessage(
+		message: SQS.Message,
+		options?: ProcessMessageOptions
+	): Promise<void>;
+	/**
+	 * This function does not throw when the consumer function fails.
+	 * Instead, it returns a list of failed messages as IFailedConsumerMessages
+	 * @param messages A list of messages received from topic
+	 * @param options ProcessMessageOptions
+	 * @returns An object containing a list of the messages that failed.
+	 * This object is compatible with the return type required by lambda event
+	 * source mapping and thus can be returned from the lambda directly
+	 */
+	processMessages(
+		messages: SQS.Message[],
+		options?: ProcessMessageOptions
+	): Promise<IFailedConsumerMessages>;
+	/**
+	 * @param topic A Topic object
+	 *
+	 * To get the correct arn, the following properties should be provided
+	 * if applicable
+	 *
+	 * name, isFifo
+	 * @returns ARN of Topic that the broker generates internally
+	 */
+	getTopicReference(topic: Topic): string;
+	/**
+	 * @param topic A Topic object
+	 *
+	 * To get the correct name, the following properties should be provided
+	 * if applicable
+	 *
+	 * name, isFifo
+	 * @returns Name of Topic that the broker generates internally
+	 */
+	getInternalTopicName(topic: Topic): string;
+	/**
+	 * @returns An array of all the queues being consumed
+	 * by the broker
+	 */
+	getQueues(): Queue[];
+	/**
+	 * @param topic A Topic object
+	 *
+	 * To get the correct queue, the following properties should be provided
+	 * if applicable
+	 *
+	 * name, isFifo, separateConsumerGroup, exchangeType
+	 * @returns The subscribed queue arn for the topic
+	 */
+	getQueueReference(topic: Topic): string;
+	/**
+	 * @param topic A Topic object
+	 *
+	 * To get the correct queue, the following properties should be provided
+	 * if applicable
+	 *
+	 * name, isFifo, separateConsumerGroup, exchangeType
+	 * @returns The subscribed queue internal name for the topic
+	 */
+	getInternalQueueName(topic: Topic): string;
+	/**
+	 * Start consuming the topics
+	 */
+	startConsumers(): Promise<void>;
+	getTransformedMessage(
+		topic: Topic,
+		args: any[],
+		options?: Pick<
+			IEmitOptions,
+			'partitionKey' | 'MessageAttributes' | 'deduplicationId'
+		>
+	): IMessage;
 }
 
 export type ISNSMessage =  IMessage;
