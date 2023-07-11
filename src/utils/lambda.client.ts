@@ -1,10 +1,16 @@
-import { Lambda } from "aws-sdk";
+import {
+  Lambda,
+  LambdaClientConfig,
+  EventSourceMappingConfiguration,
+  CreateEventSourceMappingRequest,
+  ListEventSourceMappingsRequest,
+} from "@aws-sdk/client-lambda";
 import { ICreateQueueLambdaEventSourceInput } from "../types";
 import { Logger } from "./utils";
 
 export class LambdaClient {
   private readonly lambda: Lambda;
-  constructor(config: Lambda.ClientConfiguration) {
+  constructor(config: LambdaClientConfig) {
     this.lambda = new Lambda(config);
   }
 
@@ -13,8 +19,8 @@ export class LambdaClient {
   }
   createQueueMappingForLambda = async (
     input: ICreateQueueLambdaEventSourceInput
-  ): Promise<Lambda.EventSourceMappingConfiguration | void> => {
-    const params: Lambda.CreateEventSourceMappingRequest = {
+  ): Promise<EventSourceMappingConfiguration | void> => {
+    const params: CreateEventSourceMappingRequest = {
       EventSourceArn: input.queueARN,
       FunctionName: input.functionName,
       BatchSize: input.batchSize,
@@ -37,7 +43,7 @@ export class LambdaClient {
       if (functionName === input.functionName) {
         return;
       }
-      return await this.client.createEventSourceMapping(params).promise();
+      return await this.client.createEventSourceMapping(params);
     } catch (error: any) {
       Logger.error(
         `Event Source Mapping Creation failed: Function: ${
@@ -55,11 +61,11 @@ export class LambdaClient {
   };
 
   getEventSourceMapping = async (queueARN: string) => {
-    const params: Lambda.ListEventSourceMappingsRequest = {
+    const params: ListEventSourceMappingsRequest = {
       EventSourceArn: queueARN,
     };
     try {
-      return await this.client.listEventSourceMappings(params).promise();
+      return await this.client.listEventSourceMappings(params);
     } catch (error) {
       Logger.error(
         `Failed to list Event Source Mapping for Queue: ${queueARN}`

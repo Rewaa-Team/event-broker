@@ -1,9 +1,23 @@
-import { SQS } from "aws-sdk";
+import {
+  SQS,
+  SQSClientConfig,
+  SendMessageResult,
+  SendMessageRequest,
+  CreateQueueRequest,
+  GetQueueAttributesRequest,
+  DeleteQueueRequest,
+  DeleteMessageRequest,
+  GetQueueUrlRequest,
+  SetQueueAttributesRequest,
+  SendMessageBatchResult,
+  SendMessageBatchRequest,
+  DeleteMessageBatchRequest,
+  MessageAttributeValue,
+} from "@aws-sdk/client-sqs";
 import {
   IMessage,
   ISQSMessage,
   ISQSMessageOptions,
-  Queue,
   Topic,
 } from "../types";
 import { Logger } from "../utils/utils";
@@ -18,7 +32,7 @@ import { v4 } from "uuid";
 
 export class SQSProducer {
   private readonly sqs: SQS;
-  constructor(config: SQS.ClientConfiguration) {
+  constructor(config: SQSClientConfig) {
     this.sqs = new SQS(config);
   }
 
@@ -30,8 +44,8 @@ export class SQSProducer {
     queueUrl: string,
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
-  ): Promise<SQS.SendMessageResult> => {
-    const params: SQS.SendMessageRequest = {
+  ): Promise<SendMessageResult> => {
+    const params: SendMessageRequest = {
       MessageBody: JSON.stringify(message),
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
@@ -43,15 +57,15 @@ export class SQSProducer {
       params.MessageGroupId = message.messageGroupId;
     }
 
-    return await this.sqs.sendMessage(params).promise();
+    return await this.sqs.sendMessage(params);
   };
 
   sendBatch = async (
     queueUrl: string,
     messages: ISQSMessage[],
-  ): Promise<SQS.SendMessageBatchResult> => {
+  ): Promise<SendMessageBatchResult> => {
     const isFifo = this.isFifoQueue(queueUrl);
-    const params: SQS.SendMessageBatchRequest = {
+    const params: SendMessageBatchRequest = {
       Entries: messages.map((message) => {
         return {
           Id: message.id!,
@@ -67,7 +81,7 @@ export class SQSProducer {
       QueueUrl: queueUrl,
     };
 
-    return await this.sqs.sendMessageBatch(params).promise();
+    return await this.sqs.sendMessageBatch(params);
   };
 
   createQueue = async (
@@ -78,13 +92,13 @@ export class SQSProducer {
     if (this.isFifoQueue(queueName)) {
       attributes.FifoQueue = "true";
     }
-    const params: SQS.CreateQueueRequest = {
+    const params: CreateQueueRequest = {
       QueueName: queueName,
       Attributes: attributes,
     };
 
     try {
-      const { QueueUrl } = await this.sqs.createQueue(params).promise();
+      const { QueueUrl } = await this.sqs.createQueue(params);
       return QueueUrl;
     } catch (error) {
       Logger.error(`Queue creation failed: ${queueName}`);
@@ -152,14 +166,13 @@ export class SQSProducer {
     queueUrl: string,
     attributes: string[]
   ): Promise<Record<string, string> | undefined> => {
-    const params: SQS.GetQueueAttributesRequest = {
+    const params: GetQueueAttributesRequest = {
       QueueUrl: queueUrl,
       AttributeNames: attributes,
     };
     try {
       const { Attributes } = await this.sqs
-        .getQueueAttributes(params)
-        .promise();
+        .getQueueAttributes(params);
       return Attributes;
     } catch (error) {
       Logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
@@ -168,11 +181,11 @@ export class SQSProducer {
   };
 
   deleteQueue = async (queueUrl: string): Promise<boolean> => {
-    const params: SQS.DeleteQueueRequest = {
+    const params: DeleteQueueRequest = {
       QueueUrl: queueUrl,
     };
     try {
-      await this.sqs.deleteQueue(params).promise();
+      await this.sqs.deleteQueue(params);
       return true;
     } catch (error) {
       Logger.error(`Queue deletion failed: ${queueUrl}`);
@@ -184,12 +197,12 @@ export class SQSProducer {
     queueUrl: string,
     receiptHandle: string
   ): Promise<boolean> => {
-    const params: SQS.DeleteMessageRequest = {
+    const params: DeleteMessageRequest = {
       QueueUrl: queueUrl,
       ReceiptHandle: receiptHandle,
     };
     try {
-      await this.sqs.deleteMessage(params).promise();
+      await this.sqs.deleteMessage(params);
       return true;
     } catch (error) {
       Logger.error(`Message deletion failed: ${queueUrl} - ${receiptHandle}`);
@@ -201,7 +214,7 @@ export class SQSProducer {
     queueUrl: string,
     receiptHandles: string[]
   ): Promise<boolean> => {
-    const params: SQS.DeleteMessageBatchRequest = {
+    const params: DeleteMessageBatchRequest = {
       QueueUrl: queueUrl,
       Entries: receiptHandles.map((receiptHandle) => ({
         Id: v4(),
@@ -209,7 +222,7 @@ export class SQSProducer {
       })),
     };
     try {
-      await this.sqs.deleteMessageBatch(params).promise();
+      await this.sqs.deleteMessageBatch(params);
       return true;
     } catch (error) {
       Logger.error(
@@ -220,11 +233,11 @@ export class SQSProducer {
   };
 
   getQueueUrl = async (queueName: string): Promise<string | undefined> => {
-    const params: SQS.GetQueueUrlRequest = {
+    const params: GetQueueUrlRequest = {
       QueueName: queueName,
     };
     try {
-      const result = await this.sqs.getQueueUrl(params).promise();
+      const result = await this.sqs.getQueueUrl(params);
       return result.QueueUrl;
     } catch (error) {
       Logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
@@ -236,12 +249,12 @@ export class SQSProducer {
     queueUrl: string,
     attributes: Record<string, string>
   ) => {
-    const params: SQS.SetQueueAttributesRequest = {
+    const params: SetQueueAttributesRequest = {
       QueueUrl: queueUrl,
       Attributes: attributes,
     };
     try {
-      await this.sqs.setQueueAttributes(params).promise();
+      await this.sqs.setQueueAttributes(params);
     } catch (error) {
       Logger.error(`setQueueAttributes failed for queueUrl: ${queueUrl}`);
       throw error;
@@ -253,7 +266,7 @@ export class SQSProducer {
   private getMessageAttributes(
     queueUrl: string,
     message: IMessage
-  ): SQS.MessageBodyAttributeMap {
+  ): Record<string, MessageAttributeValue> {
     return {
       ...(message.messageAttributes || {}),
       ContentType: {

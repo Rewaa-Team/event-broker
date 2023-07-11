@@ -1,11 +1,21 @@
-import { SNS } from "aws-sdk";
+import {
+  SNS,
+  SNSClientConfig,
+  PublishResponse,
+  PublishInput,
+  CreateTopicInput,
+  SubscribeInput,
+  SubscribeResponse,
+  PublishBatchResponse,
+  PublishBatchInput
+} from "@aws-sdk/client-sns";
 import { ISNSMessage } from "../types";
 import { Logger } from "../utils/utils";
 import { v4 } from "uuid";
 
 export class SNSProducer {
   private readonly sns: SNS;
-  constructor(config: SNS.ClientConfiguration) {
+  constructor(config: SNSClientConfig) {
     this.sns = new SNS(config);
   }
 
@@ -16,8 +26,8 @@ export class SNSProducer {
   send = async (
     topicArn: string,
     message: ISNSMessage
-  ): Promise<SNS.PublishResponse> => {
-    const params: SNS.PublishInput = {
+  ): Promise<PublishResponse> => {
+    const params: PublishInput = {
       Message: JSON.stringify(message),
       TargetArn: topicArn,
     };
@@ -29,15 +39,15 @@ export class SNSProducer {
 
     params.MessageAttributes = message.messageAttributes;
 
-    return await this.sns.publish(params).promise();
+    return await this.sns.publish(params);
   };
 
   sendBatch = async (
     topicArn: string,
     messages: ISNSMessage[]
-  ): Promise<SNS.PublishBatchResponse> => {
+  ): Promise<PublishBatchResponse> => {
     const isFifo = this.isFifoTopic(topicArn);
-    const params: SNS.PublishBatchInput = {
+    const params: PublishBatchInput = {
       TopicArn: topicArn,
       PublishBatchRequestEntries: messages.map((message) => {
         return {
@@ -52,14 +62,14 @@ export class SNSProducer {
       }),
     };
 
-    return await this.sns.publishBatch(params).promise();
+    return await this.sns.publishBatch(params);
   };
 
   createTopic = async (
     topicName: string,
     attributes: Record<string, string>
   ): Promise<string | undefined> => {
-    const params: SNS.CreateTopicInput = {
+    const params: CreateTopicInput = {
       Name: topicName,
       Attributes: attributes,
     };
@@ -69,7 +79,7 @@ export class SNSProducer {
     }
 
     try {
-      const { TopicArn } = await this.sns.createTopic(params).promise();
+      const { TopicArn } = await this.sns.createTopic(params);
       return TopicArn;
     } catch (error) {
       Logger.error(`Topic creation failed: ${topicName}`);
@@ -81,8 +91,8 @@ export class SNSProducer {
     topicArn: string,
     queueArn: string,
     filterPolicy?: any
-  ): Promise<SNS.SubscribeResponse> => {
-    const params: SNS.SubscribeInput = {
+  ): Promise<SubscribeResponse> => {
+    const params: SubscribeInput = {
       TopicArn: topicArn,
       Protocol: "sqs",
       Endpoint: queueArn,
@@ -95,7 +105,7 @@ export class SNSProducer {
     }
 
     try {
-      return await this.sns.subscribe(params).promise();
+      return await this.sns.subscribe(params);
     } catch (error) {
       Logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
       throw error;
