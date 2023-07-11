@@ -1,12 +1,14 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { SQS, SNS, Lambda } from "aws-sdk";
+import { MessageAttributeValue, SQSClientConfig, Message } from "@aws-sdk/client-sqs";
+import { SNSClientConfig } from "@aws-sdk/client-sns";
+import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
 export interface IMessage {
   data: any;
   eventName: string;
   messageGroupId?: string;
-  messageAttributes?: { [key: string]: IMessageAttributes };
+  messageAttributes?: { [key: string]: MessageAttributeValue };
   deduplicationId?: string;
   id?: string;
   delay?: number;
@@ -65,7 +67,7 @@ export interface IEmitOptions {
   /**
    * Message attributes to be sent along with the message
    */
-  MessageAttributes?: { [key: string]: IMessageAttributes };
+  MessageAttributes?: { [key: string]: MessageAttributeValue };
    /**
    * Set to a unique id if you want to avoid duplications in
    * a FIFO queue. The same deduplicationId sent within a 5
@@ -89,11 +91,11 @@ export interface IFailedEmitBatchMessage {
   /**
    * The batch-level unique id of the failed message
    */
-  id: string;
+  id?: string;
   /**
    * An error code representing why the message failed
    */
-  code: string;
+  code?: string;
   /**
    * An optional message explaining the failure
    */
@@ -268,15 +270,15 @@ export interface IEmitterOptions {
   /**
    * Optional SQS Client config used by message producer
    */
-  sqsConfig?: SQS.ClientConfiguration;
+  sqsConfig?: SQSClientConfig;
   /**
    * Optional SNS Client config used by message producer
    */
-  snsConfig?: SNS.ClientConfiguration;
+  snsConfig?: SNSClientConfig;
   /**
    * Optional Lambda Client config used by message producer
    */
-  lambdaConfig?: Lambda.ClientConfiguration;
+  lambdaConfig?: LambdaClientConfig;
   /**
    * Optional default queues options when consuming on a default queue
    *
@@ -348,7 +350,7 @@ export interface IEmitter {
    * @param options ProcessMessageOptions
    */
   processMessage(
-    message: SQS.Message,
+    message: Message,
     options?: ProcessMessageOptions
   ): Promise<void>;
   /**
@@ -361,7 +363,7 @@ export interface IEmitter {
    * source mapping and thus can be returned from the lambda directly
    */
   processMessages(
-    messages: SQS.Message[],
+    messages: Message[],
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages>
   /**

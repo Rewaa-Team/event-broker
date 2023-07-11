@@ -30,8 +30,9 @@ import {
   IFailedConsumerMessages,
 } from "../types";
 import { Logger } from "../utils/utils";
-import { SNS, SQS } from "aws-sdk";
-import { Lambda } from "aws-sdk";
+import { SubscribeResponse } from '@aws-sdk/client-sns';
+import { Message } from '@aws-sdk/client-sqs';
+import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
@@ -80,7 +81,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createEventSourceMappings() {
-    const promises: Promise<Lambda.EventSourceMappingConfiguration | void>[] =
+    const promises: Promise<EventSourceMappingConfiguration | void>[] =
       [];
     const uniqueQueueMap: Map<string, boolean> = new Map();
     this.topics.forEach((topic) => {
@@ -203,7 +204,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async subscribeToTopics() {
-    let subscriptionPromises: Promise<SNS.SubscribeResponse>[] = [];
+    let subscriptionPromises: Promise<SubscribeResponse>[] = [];
     const queues = Array.from(this.queues, ([_, value]) => {
       return value;
     });
@@ -383,12 +384,13 @@ export class SqnsEmitter implements IEmitter {
         };
       })
     );
-    return result.Failed.map((failed) => ({
+    return (result.Failed?.map((failed) => ({
       id: failed.Id,
       code: failed.Code,
       message: failed.Message,
       wasSenderFault: failed.SenderFault,
-    }));
+    })) || []
+    );
   }
 
   async emitBatch(
@@ -444,7 +446,7 @@ export class SqnsEmitter implements IEmitter {
       queueUrl: queue.url,
       messageAttributeNames: ["All"],
       handleMessageBatch: async (messages) => {
-        await this.processMessages(messages as SQS.Message[], {
+        await this.processMessages(messages as Message[], {
           shouldDeleteMessage: true,
           queueReference: queue.url!,
         });
@@ -496,7 +498,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private handleMessageReceipt = async (
-    message: SQS.Message,
+    message: Message,
     queueUrl: string,
     deleteOptions?: MessageDeleteOptions
   ) => {
@@ -575,7 +577,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async onMessageReceived(
-    receivedMessage: SQS.Message,
+    receivedMessage: Message,
     queueUrl: string
   ) {
     let snsMessage: ISNSReceiveMessage;
@@ -622,7 +624,7 @@ export class SqnsEmitter implements IEmitter {
 
   private async deleteMessages(
     queueUrl: string,
-    messages: SQS.Message[],
+    messages: Message[],
     results: PromiseSettledResult<any>[]
   ): Promise<void> {
     const receiptsToDelete: string[] = [];
@@ -638,7 +640,7 @@ export class SqnsEmitter implements IEmitter {
 
   private async processFifoQueueMessages(
     queueUrl: string,
-    messages: SQS.Message[],
+    messages: Message[],
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     let i = 0;
@@ -667,7 +669,7 @@ export class SqnsEmitter implements IEmitter {
 
   private async processStandardQueueMessages(
     queueUrl: string,
-    messages: SQS.Message[],
+    messages: Message[],
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     const results = await Promise.allSettled(
@@ -676,7 +678,7 @@ export class SqnsEmitter implements IEmitter {
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
     }
-    const failedMessages: SQS.Message[] = [];
+    const failedMessages: Message[] = [];
     results.forEach((result, index) => {
       if (result.status === "rejected") {
         failedMessages.push(messages[index]);
@@ -692,7 +694,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async processMessages(
-    messages: SQS.Message[],
+    messages: Message[],
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     const queueUrl =
@@ -705,7 +707,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async processMessage(
-    message: SQS.Message,
+    message: Message,
     options?: ProcessMessageOptions
   ): Promise<void> {
     /**
@@ -761,7 +763,7 @@ export class SqnsEmitter implements IEmitter {
     return this.getQueueName(topic);
   }
 
-  private getQueueUrlFromMessage(message: SQS.Message): string {
+  private getQueueUrlFromMessage(message: Message): string {
     const receivedMessage = message as any;
     let queueUrl =
       receivedMessage.MessageAttributes?.QueueUrl.StringValue ||
@@ -790,7 +792,7 @@ export class SqnsEmitter implements IEmitter {
     return `https://${service}.${region}.amazonaws.com/${accountId}/${queueName}`;
   }
 
-  private getMessageIdFromMessage(message: SQS.Message): string {
+  private getMessageIdFromMessage(message: Message): string {
     const messageId = message.MessageId || (message as any).messageId;
     return messageId;
   }
