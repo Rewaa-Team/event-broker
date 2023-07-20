@@ -442,6 +442,7 @@ export class SqnsEmitter implements IEmitter {
        * in the batch throws
        */
       shouldDeleteMessages: false,
+      sqs: this.sqsProducer.client,
       region: this.options.awsConfig?.region,
       queueUrl: queue.url,
       messageAttributeNames: ["All"],
