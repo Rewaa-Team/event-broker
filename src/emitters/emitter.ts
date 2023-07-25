@@ -14,20 +14,20 @@ import {
   Queue,
   Topic,
 } from "../types";
-import { Logger } from "../utils/utils";
 import { SqnsEmitter } from "./emitter.sqns";
+import { Logger } from "../utils/utils";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
   private emitter!: IEmitter;
   private options!: IEmitterOptions;
+  private logger;
 
   constructor(options: IEmitterOptions) {
     this.options = options;
-    this.options.localEmitter = this.localEmitter;
-    Logger.logsEnabled = !!this.options.log;
+    this.logger = options.logger ?? new Logger(!!this.options.log);
     if (this.options.useExternalBroker) {
-      this.emitter = new SqnsEmitter(this.options);
+      this.emitter = new SqnsEmitter(this.logger, this.options, );
     }
   }
 

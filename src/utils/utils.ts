@@ -1,18 +1,24 @@
-export class Logger {
-  static logsEnabled = false;
-  static error(error: any) {
+import { Logger as LoggerI } from "../types";
+
+export class Logger implements LoggerI {
+  constructor(private readonly logsEnabled: boolean) {}
+
+  public error(error: any) {
     if(!this.logsEnabled) return;
     console.error(`EventBrokerLog ::: ${error}`);
   }
-  static warn(message: any) {
+
+  public warn(message: any) {
     if(!this.logsEnabled) return;
     console.warn(`EventBrokerLog ::: ${message}`);
   }
-  static debug(message: any) {
+
+  public debug(message: any) {
     if(!this.logsEnabled) return;
     console.debug(`EventBrokerLog ::: ${message}`);
   }
-  static info(message: any) {
+
+  public info(message: any) {
     if(!this.logsEnabled) return;
     console.info(`EventBrokerLog ::: ${message}`);
   }

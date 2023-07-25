@@ -5,12 +5,14 @@ import {
   CreateEventSourceMappingRequest,
   ListEventSourceMappingsRequest,
 } from "@aws-sdk/client-lambda";
-import { ICreateQueueLambdaEventSourceInput } from "../types";
-import { Logger } from "./utils";
+import { ICreateQueueLambdaEventSourceInput, Logger } from "../types";
 
 export class LambdaClient {
   private readonly lambda: Lambda;
-  constructor(config: LambdaClientConfig) {
+  constructor(
+    private readonly logger: Logger,
+    config: LambdaClientConfig
+  ) {
     this.lambda = new Lambda(config);
   }
 
@@ -45,13 +47,13 @@ export class LambdaClient {
       }
       return await this.client.createEventSourceMapping(params);
     } catch (error: any) {
-      Logger.error(
+      this.logger.error(
         `Event Source Mapping Creation failed: Function: ${
           input.functionName
         } ${JSON.stringify(error)}`
       );
       if (error?.name === "ResourceConflictException") {
-        Logger.warn(
+        this.logger.warn(
           `Event Source Mapping already exists: Function: ${input.functionName}`
         );
         return;
@@ -67,7 +69,7 @@ export class LambdaClient {
     try {
       return await this.client.listEventSourceMappings(params);
     } catch (error) {
-      Logger.error(
+      this.logger.error(
         `Failed to list Event Source Mapping for Queue: ${queueARN}`
       );
       throw error;

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import {
@@ -28,8 +29,10 @@ import {
   IBatchEmitOptions,
   IFailedEmitBatchMessage,
   IFailedConsumerMessages,
+  FailedEventCategory,
+  ProcessMessageContext,
+  Logger,
 } from "../types";
-import { Logger } from "../utils/utils";
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
@@ -48,8 +51,12 @@ export class SqnsEmitter implements IEmitter {
   private queues: Map<string, Queue> = new Map();
   private consumersStarted: boolean = false;
 
-  constructor(options: IEmitterOptions) {
+  constructor(
+    private readonly logger: Logger,
+    options: IEmitterOptions
+  ) {
     this.options = options;
+    this.logger = logger;
     if (!this.options.awsConfig) {
       throw new Error(
         `awsConfig is required in options when using external broker.`
@@ -57,12 +64,15 @@ export class SqnsEmitter implements IEmitter {
     }
     this.localEmitter = options.localEmitter;
     this.snsProducer = new SNSProducer(
+      this.logger,
       this.options.snsConfig || { ...this.options.awsConfig }
     );
     this.sqsProducer = new SQSProducer(
+      this.logger,
       this.options.sqsConfig || { ...this.options.awsConfig }
     );
     this.lambdaClient = new LambdaClient(
+      this.logger,
       this.options.lambdaConfig || { ...this.options.awsConfig }
     );
     this.addDefaultQueues();
@@ -101,15 +111,15 @@ export class SqnsEmitter implements IEmitter {
     });
     await Promise.all(promises);
     if (promises.length) {
-      Logger.info(`Event source mappings created`);
+      this.logger.info(`Event source mappings created`);
     } else {
-      Logger.info(`No event source mappings created`);
+      this.logger.info(`No event source mappings created`);
     }
   }
 
   private addDefaultQueues() {
     if (!this.options.defaultQueueOptions) {
-      Logger.info(`No default queues specified.`);
+      this.logger.info(`No default queues specified.`);
       return;
     }
     this.topics.set(this.options.defaultQueueOptions.fifo.name, {
@@ -141,7 +151,7 @@ export class SqnsEmitter implements IEmitter {
       topicCreationPromises.push(this.createTopic(topic));
     });
     await Promise.all(topicCreationPromises);
-    Logger.info(`Topics created`);
+    this.logger.info(`Topics created`);
   }
 
   private async createQueue(topic: Topic) {
@@ -185,7 +195,7 @@ export class SqnsEmitter implements IEmitter {
         }
       }
     });
-    Logger.info(`Queues created`);
+    this.logger.info(`Queues created`);
   }
 
   private getTopicArn(topicName: string): string {
@@ -230,7 +240,7 @@ export class SqnsEmitter implements IEmitter {
         subscriptionPromises = [];
       }
     }
-    Logger.info(`Topic subscription complete`);
+    this.logger.info(`Topic subscription complete`);
   }
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
@@ -325,10 +335,11 @@ export class SqnsEmitter implements IEmitter {
       }
       return await this.emitToTopic(topic, options, ...args);
     } catch (error) {
-      Logger.error(
+      this.logger.error(
         `Message producing failed: ${eventName} ${JSON.stringify(error)}`
       );
       this.logFailedEvent({
+        failureType: FailedEventCategory.MessageProducingFailed,
         topic: eventName,
         event: args,
         error: error,
@@ -410,7 +421,7 @@ export class SqnsEmitter implements IEmitter {
       }
       return await this.emitBatchToTopic(topic, messages);
     } catch (error) {
-      Logger.error(
+      this.logger.error(
         `Batch Message producing failed: ${eventName} ${JSON.stringify(error)}`
       );
       throw error;
@@ -428,7 +439,7 @@ export class SqnsEmitter implements IEmitter {
       this.startConsumer(queue);
     });
     this.consumersStarted = true;
-    Logger.info(`Consumers started`);
+    this.logger.info(`Consumers started`);
   }
 
   private startConsumer(queue: Queue) {
@@ -457,8 +468,9 @@ export class SqnsEmitter implements IEmitter {
     });
 
     queue.consumer.on("error", (error, message) => {
-      Logger.error(`Queue error ${JSON.stringify(error)}`);
+      this.logger.error(`Queue error ${JSON.stringify(error)}`);
       this.logFailedEvent({
+        failureType: FailedEventCategory.QueueError,
         topic: "",
         event: message,
         error,
@@ -466,8 +478,9 @@ export class SqnsEmitter implements IEmitter {
     });
 
     queue.consumer.on("processing_error", (error, message) => {
-      Logger.error(`Queue Processing error ${JSON.stringify(error)}`);
+      this.logger.error(`Queue Processing error ${JSON.stringify(error)}`);
       this.logFailedEvent({
+        failureType: FailedEventCategory.QueueProcessingError,
         topic: "",
         event: message,
         error,
@@ -475,16 +488,18 @@ export class SqnsEmitter implements IEmitter {
     });
 
     queue.consumer.on("stopped", () => {
-      Logger.error("Queue stopped");
+      this.logger.error("Queue stopped");
       this.logFailedEvent({
+        failureType: FailedEventCategory.QueueStopped,
         topic: "",
         event: "Queue stopped",
       });
     });
 
     queue.consumer.on("timeout_error", () => {
-      Logger.error("Queue timed out");
+      this.logger.error("Queue timed out");
       this.logFailedEvent({
+        failureType: FailedEventCategory.QueueTimedOut,
         topic: "",
         event: "Queue timed out",
       });
@@ -492,10 +507,29 @@ export class SqnsEmitter implements IEmitter {
 
     queue.consumer.on("empty", () => {
       if (!queue.consumer?.isRunning) {
-        Logger.info(`Queue not running`);
+        this.logger.info(`Queue not running`);
       }
     });
     queue.consumer.start();
+  }
+
+  private runMessageHandling = async (
+    message: Message,
+    queueUrl: string,
+    executionContext: ProcessMessageContext,
+    deleteOptions?: MessageDeleteOptions,
+  ) => {
+    this.logger.info(
+      `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
+    );
+    await this.onMessageReceived(message, queueUrl, executionContext);
+    if (deleteOptions) {
+      await this.sqsProducer.deleteMessage(
+        deleteOptions.queueUrl,
+        deleteOptions.receiptHandle
+      );
+    }
+    this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
   }
 
   private handleMessageReceipt = async (
@@ -503,18 +537,18 @@ export class SqnsEmitter implements IEmitter {
     queueUrl: string,
     deleteOptions?: MessageDeleteOptions
   ) => {
-    const key = v4();
-    Logger.info(
-      `Message started ${queueUrl}_${key}_${new Date()}_${message?.Body?.toString()}`
-    );
-    await this.onMessageReceived(message, queueUrl);
-    if (deleteOptions) {
-      await this.sqsProducer.deleteMessage(
-        deleteOptions.queueUrl,
-        deleteOptions.receiptHandle
-      );
+    const executionContext: ProcessMessageContext = {
+      executionTraceId: v4(),
+    };
+    const localStorageParams = this.logger.getStore?.(executionContext);
+    if (localStorageParams) {
+      await localStorageParams.storage.run(
+        localStorageParams.store,
+        async () => await this.runMessageHandling(message, queueUrl, executionContext, deleteOptions)
+      )
+    } else {
+      await this.runMessageHandling(message, queueUrl, executionContext, deleteOptions);
     }
-    Logger.info(`Message ended ${queueUrl}_${key}_${new Date()}`);
   };
 
   removeListener(eventName: string, listener: EventListener<any>) {
@@ -579,7 +613,8 @@ export class SqnsEmitter implements IEmitter {
 
   private async onMessageReceived(
     receivedMessage: Message,
-    queueUrl: string
+    queueUrl: string,
+    executionContext: ProcessMessageContext,
   ) {
     let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
@@ -590,21 +625,25 @@ export class SqnsEmitter implements IEmitter {
         message = JSON.parse(snsMessage.Message);
       }
     } catch (error) {
-      Logger.error("Failed to parse message");
+      this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
       this.logFailedEvent({
+        failureType: FailedEventCategory.IncomingMessageFailedToParse,
         topicReference: queueUrl,
         event: receivedMessage.Body,
         error: `Failed to parse message`,
+        executionContext,
       });
       throw new Error(`Failed to parse message`);
     }
     const listeners = this.topicListeners.get(message.eventName);
     if (!listeners) {
-      Logger.error(`No listener found. Message: ${JSON.stringify(message)}`);
+      this.logger.error(`No listener found. Trace Id: ${executionContext.executionTraceId}. Message: ${JSON.stringify(message)}`);
       this.logFailedEvent({
+        failureType: FailedEventCategory.NoListenerFound,
         topic: message.eventName,
         event: message,
         error: `No listener found`,
+        executionContext,
       });
       throw new Error(`No listener found`);
     }
@@ -613,12 +652,16 @@ export class SqnsEmitter implements IEmitter {
       for (const listener of listeners) {
         await listener(...message.data);
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logFailedEvent({
+        failureType: FailedEventCategory.MessageProcessingFailed,
         topic: message.eventName,
         event: message,
         error: error,
+        executionContext,
       });
+      // Doing this because i don't want to mess with stack trace of rethrowing error
+      error['executionTraceId'] = executionContext.executionTraceId;
       throw error;
     }
   }
@@ -652,9 +695,9 @@ export class SqnsEmitter implements IEmitter {
       return {
         batchItemFailures: [],
       };
-    } catch (error) {
-      Logger.error(
-        `Fifo queue message failed :: ${queueUrl} :: ${JSON.stringify(
+    } catch (error: any) {
+      this.logger.error(
+        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${error['executionTraceId'] ?? ''} :: ${JSON.stringify(
           messages[i]
         )}`
       );
@@ -676,6 +719,7 @@ export class SqnsEmitter implements IEmitter {
     const results = await Promise.allSettled(
       messages.map((message) => this.processMessage(message))
     );
+    // Will this not delete the message even when it failed, don't know for sure - please check
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
     }
