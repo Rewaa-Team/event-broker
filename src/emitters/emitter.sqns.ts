@@ -513,12 +513,14 @@ export class SqnsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
-  private runMessageHandling = async (
+  private handleMessageReceipt = async (
     message: Message,
     queueUrl: string,
-    executionContext: ProcessMessageContext,
-    deleteOptions?: MessageDeleteOptions,
+    deleteOptions?: MessageDeleteOptions
   ) => {
+    const executionContext: ProcessMessageContext = {
+      executionTraceId: v4(),
+    };
     this.logger.info(
       `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
     );
@@ -530,25 +532,6 @@ export class SqnsEmitter implements IEmitter {
       );
     }
     this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
-  }
-
-  private handleMessageReceipt = async (
-    message: Message,
-    queueUrl: string,
-    deleteOptions?: MessageDeleteOptions
-  ) => {
-    const executionContext: ProcessMessageContext = {
-      executionTraceId: v4(),
-    };
-    const localStorageParams = this.logger.getStore?.(executionContext);
-    if (localStorageParams) {
-      await localStorageParams.storage.run(
-        localStorageParams.store,
-        async () => await this.runMessageHandling(message, queueUrl, executionContext, deleteOptions)
-      )
-    } else {
-      await this.runMessageHandling(message, queueUrl, executionContext, deleteOptions);
-    }
   };
 
   removeListener(eventName: string, listener: EventListener<any>) {
@@ -650,7 +633,11 @@ export class SqnsEmitter implements IEmitter {
 
     try {
       for (const listener of listeners) {
-        await listener(...message.data);
+        await listener(message.data, { 
+          executionTraceId: executionContext.executionTraceId,
+          messageId: message.id,
+          messageAttributes: message.messageAttributes,
+         });
       }
     } catch (error: any) {
       this.logFailedEvent({
@@ -719,7 +706,6 @@ export class SqnsEmitter implements IEmitter {
     const results = await Promise.allSettled(
       messages.map((message) => this.processMessage(message))
     );
-    // Will this not delete the message even when it failed, don't know for sure - please check
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
     }

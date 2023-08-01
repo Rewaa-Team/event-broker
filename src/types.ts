@@ -3,21 +3,12 @@ import { Consumer } from "sqs-consumer";
 import { MessageAttributeValue, SQSClientConfig, Message } from "@aws-sdk/client-sqs";
 import { SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
-import { AsyncLocalStorage } from "async_hooks";
 
 export interface Logger {
   error(error: any): void;
   warn(message: any): void;
   debug(message: any): void;
   info(message: any): void;
-  /**
-   * @returns Returns the async local storage and store which will be used to call the message handler
-   * so that the other log functions and those logs that the service itself does happen in the same context
-   */
-  getStore?: (executionContext?: ProcessMessageContext) => ({
-    storage: AsyncLocalStorage<unknown>,
-    store: unknown,
-  });
 }
 
 export interface IMessage {
@@ -334,7 +325,13 @@ export type DefaultQueueOptions = Omit<
   "separateConsumerGroup" | "isFifo" | "exchangeType"
 >;
 
-export type EventListener<T> = (...args: T[]) => Promise<void>;
+export interface MessageMetaData {
+  executionTraceId: string;
+  messageId?: string;
+  messageAttributes?: { [key: string]: MessageAttributeValue };
+}
+
+export type EventListener<T> = (args: T[], metadata?: MessageMetaData) => Promise<void>;
 
 export interface IEmitter {
   /**

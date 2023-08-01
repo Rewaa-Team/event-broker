@@ -15,13 +15,14 @@ import {
   Topic,
 } from "../types";
 import { SqnsEmitter } from "./emitter.sqns";
+import { Logger as LoggerI } from "../types";
 import { Logger } from "../utils/utils";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
   private emitter!: IEmitter;
   private options!: IEmitterOptions;
-  private logger;
+  private logger: LoggerI;
 
   constructor(options: IEmitterOptions) {
     this.options = options;
