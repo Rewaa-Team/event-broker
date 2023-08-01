@@ -1,6 +1,6 @@
-import { Logger as LoggerI } from "../types";
+import { Logger as ILogger } from "../types";
 
-export class Logger implements LoggerI {
+export class Logger implements ILogger {
   constructor(private readonly logsEnabled: boolean) {}
 
   public error(error: any) {
