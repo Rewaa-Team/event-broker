@@ -18,9 +18,9 @@ import {
   IMessage,
   ISQSMessage,
   ISQSMessageOptions,
+  Logger,
   Topic,
 } from "../types";
-import { Logger } from "../utils/utils";
 import {
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD,
@@ -32,7 +32,10 @@ import { v4 } from "uuid";
 
 export class SQSProducer {
   private readonly sqs: SQS;
-  constructor(config: SQSClientConfig) {
+  constructor(
+    private readonly logger: Logger,
+    config: SQSClientConfig
+  ) {
     this.sqs = new SQS(config);
   }
 
@@ -101,7 +104,7 @@ export class SQSProducer {
       const { QueueUrl } = await this.sqs.createQueue(params);
       return QueueUrl;
     } catch (error) {
-      Logger.error(`Queue creation failed: ${queueName}`);
+      this.logger.error(`Queue creation failed: ${queueName}`);
       throw error;
     }
   };
@@ -175,7 +178,7 @@ export class SQSProducer {
         .getQueueAttributes(params);
       return Attributes;
     } catch (error) {
-      Logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
+      this.logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
       throw error;
     }
   };
@@ -188,7 +191,7 @@ export class SQSProducer {
       await this.sqs.deleteQueue(params);
       return true;
     } catch (error) {
-      Logger.error(`Queue deletion failed: ${queueUrl}`);
+      this.logger.error(`Queue deletion failed: ${queueUrl}`);
       throw error;
     }
   };
@@ -205,7 +208,7 @@ export class SQSProducer {
       await this.sqs.deleteMessage(params);
       return true;
     } catch (error) {
-      Logger.error(`Message deletion failed: ${queueUrl} - ${receiptHandle}`);
+      this.logger.error(`Message deletion failed: ${queueUrl} - ${receiptHandle}`);
       throw error;
     }
   };
@@ -225,7 +228,7 @@ export class SQSProducer {
       await this.sqs.deleteMessageBatch(params);
       return true;
     } catch (error) {
-      Logger.error(
+      this.logger.error(
         `Batch message deletion failed: ${queueUrl} - ${receiptHandles}`
       );
       throw error;
@@ -240,7 +243,7 @@ export class SQSProducer {
       const result = await this.sqs.getQueueUrl(params);
       return result.QueueUrl;
     } catch (error) {
-      Logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
+      this.logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
       return undefined;
     }
   };
@@ -256,7 +259,7 @@ export class SQSProducer {
     try {
       await this.sqs.setQueueAttributes(params);
     } catch (error) {
-      Logger.error(`setQueueAttributes failed for queueUrl: ${queueUrl}`);
+      this.logger.error(`setQueueAttributes failed for queueUrl: ${queueUrl}`);
       throw error;
     }
   };

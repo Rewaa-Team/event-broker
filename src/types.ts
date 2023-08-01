@@ -4,6 +4,13 @@ import { MessageAttributeValue, SQSClientConfig, Message } from "@aws-sdk/client
 import { SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
+export interface Logger {
+  error(error: any): void;
+  warn(message: any): void;
+  debug(message: any): void;
+  info(message: any): void;
+}
+
 export interface IMessage {
   data: any;
   eventName: string;
@@ -117,6 +124,8 @@ export interface IFailedEventMessage {
   topicReference?: string;
   event: any;
   error?: any;
+  failureType: FailedEventCategory;
+  executionContext?: ProcessMessageContext;
 }
 
 export interface Queue {
@@ -304,6 +313,11 @@ export interface IEmitterOptions {
    * Set to true to enable local aws
    */
   isLocal?: boolean;
+  /**
+   * @description Provide this to override the default logger and control
+   * log levels and mapping
+   */
+  logger?: Logger;
 }
 
 export type DefaultQueueOptions = Omit<
@@ -311,7 +325,13 @@ export type DefaultQueueOptions = Omit<
   "separateConsumerGroup" | "isFifo" | "exchangeType"
 >;
 
-export type EventListener<T> = (...args: T[]) => Promise<void>;
+export interface MessageMetaData {
+  executionTraceId: string;
+  messageId?: string;
+  messageAttributes?: { [key: string]: MessageAttributeValue };
+}
+
+export type EventListener<T> = (args: T[], metadata?: MessageMetaData) => Promise<void>;
 
 export interface IEmitter {
   /**
@@ -443,6 +463,17 @@ export enum ExchangeType {
   Fanout = "Fanout",
 }
 
+export enum FailedEventCategory {
+  MessageProducingFailed = 'MessageProducingFailed',
+  QueueError = 'QueueError',
+  QueueProcessingError = 'QueueProcessingError',
+  QueueStopped = 'QueueStopped',
+  QueueTimedOut = 'QueueTimedOut',
+  IncomingMessageFailedToParse = 'IncomingMessageFailedToParse',
+  NoListenerFound = 'NoListenerFound',
+  MessageProcessingFailed = 'MessageProcessingFailed',
+}
+
 export interface MessageDeleteOptions {
   /**
    * The unique ReceiptHandle of the message to delete
@@ -466,4 +497,12 @@ export interface ProcessMessageOptions {
    * provided
    */
   queueReference?: string;
+}
+
+export interface ProcessMessageContext {
+  /**
+   * @description Uniquely generated for each attempt to process a pulled message
+   * and run it through all the listeners
+   */
+  executionTraceId: string;
 }

@@ -9,13 +9,15 @@ import {
   PublishBatchResponse,
   PublishBatchInput
 } from "@aws-sdk/client-sns";
-import { ISNSMessage } from "../types";
-import { Logger } from "../utils/utils";
+import { ISNSMessage, Logger } from "../types";
 import { v4 } from "uuid";
 
 export class SNSProducer {
   private readonly sns: SNS;
-  constructor(config: SNSClientConfig) {
+  constructor(
+    private readonly logger: Logger,
+    config: SNSClientConfig
+  ) {
     this.sns = new SNS(config);
   }
 
@@ -82,7 +84,7 @@ export class SNSProducer {
       const { TopicArn } = await this.sns.createTopic(params);
       return TopicArn;
     } catch (error) {
-      Logger.error(`Topic creation failed: ${topicName}`);
+      this.logger.error(`Topic creation failed: ${topicName}`);
       throw error;
     }
   };
@@ -107,7 +109,7 @@ export class SNSProducer {
     try {
       return await this.sns.subscribe(params);
     } catch (error) {
-      Logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
+      this.logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
       throw error;
     }
   };
