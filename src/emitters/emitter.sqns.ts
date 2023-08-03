@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'async_hooks';
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import {
@@ -520,6 +519,8 @@ export class SqnsEmitter implements IEmitter {
   ) => {
     const executionContext: ProcessMessageContext = {
       executionTraceId: v4(),
+      messageId: message.MessageId,
+      receiptHandler: message.ReceiptHandle,
     };
     this.logger.info(
       `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
@@ -634,7 +635,7 @@ export class SqnsEmitter implements IEmitter {
     try {
       for (const listener of listeners) {
         await listener(message.data, { 
-          executionTraceId: executionContext.executionTraceId,
+          executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
          });

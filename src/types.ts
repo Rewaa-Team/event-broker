@@ -326,7 +326,7 @@ export type DefaultQueueOptions = Omit<
 >;
 
 export interface MessageMetaData {
-  executionTraceId: string;
+  executionContext: ProcessMessageContext;
   messageId?: string;
   messageAttributes?: { [key: string]: MessageAttributeValue };
 }
@@ -505,4 +505,13 @@ export interface ProcessMessageContext {
    * and run it through all the listeners
    */
   executionTraceId: string;
+  /**
+   * @description Unique identifier for this message. Stays consistent across
+   * multiple attempts to process it
+   */
+  messageId?: string;
+  /**
+   * @description Similar to @see executionTraceId but provided by aws
+   */
+  receiptHandler?: string;
 }
