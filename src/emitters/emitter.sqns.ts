@@ -31,6 +31,8 @@ import {
   FailedEventCategory,
   ProcessMessageContext,
   Logger,
+  IMessage,
+  EmitPayload,
 } from "../types";
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
@@ -317,6 +319,29 @@ export class SqnsEmitter implements IEmitter {
     return true;
   }
 
+  getPayloadToEmit(eventName: string, options?: IEmitOptions, ...args: any[]): EmitPayload {
+    const topic: Topic = {
+      name: eventName,
+      isFifo: !!options?.isFifo,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
+      separateConsumerGroup: options?.consumerGroup,
+    };
+    const queueOrTopic =
+      topic.exchangeType === ExchangeType.Queue
+        ? this.getQueueUrl(this.getQueueName(topic))
+        : this.getTopicArn(this.getTopicName(topic));
+    const message: IMessage = {
+      messageGroupId: options?.partitionKey || topic.name,
+      eventName: topic.name,
+      data: args,
+      messageAttributes: options?.MessageAttributes,
+      deduplicationId: options?.deduplicationId,
+    };
+    return topic.exchangeType === ExchangeType.Queue ? this.sqsProducer.constructQueueMessageRequest(queueOrTopic, message, {
+        delay: options?.delay || DEFAULT_MESSAGE_DELAY,
+      }) : this.snsProducer.constructPublishResponse(queueOrTopic, message);
+  }
+
   async emit(
     eventName: string,
     options?: IEmitOptions,
@@ -395,11 +420,11 @@ export class SqnsEmitter implements IEmitter {
       })
     );
     return (result.Failed?.map((failed) => ({
-      id: failed.Id,
-      code: failed.Code,
-      message: failed.Message,
-      wasSenderFault: failed.SenderFault,
-    })) || []
+        id: failed.Id,
+        code: failed.Code,
+        message: failed.Message,
+        wasSenderFault: failed.SenderFault,
+      })) || []
     );
   }
 
@@ -634,11 +659,11 @@ export class SqnsEmitter implements IEmitter {
 
     try {
       for (const listener of listeners) {
-        await listener(message.data, { 
+        await listener(message.data, {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
-         });
+        });
       }
     } catch (error: any) {
       this.logFailedEvent({

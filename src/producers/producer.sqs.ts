@@ -48,6 +48,14 @@ export class SQSProducer {
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
   ): Promise<SendMessageResult> => {
+    return await this.sqs.sendMessage(this.constructQueueMessageRequest(queueUrl, message, messageOptions));
+  };
+
+  constructQueueMessageRequest(
+    queueUrl: string,
+    message: ISQSMessage,
+    messageOptions: ISQSMessageOptions
+  ) {
     const params: SendMessageRequest = {
       MessageBody: JSON.stringify(message),
       QueueUrl: queueUrl,
@@ -59,9 +67,8 @@ export class SQSProducer {
       params.MessageDeduplicationId = message.deduplicationId || v4();
       params.MessageGroupId = message.messageGroupId;
     }
-
-    return await this.sqs.sendMessage(params);
-  };
+    return params;
+  }
 
   sendBatch = async (
     queueUrl: string,
