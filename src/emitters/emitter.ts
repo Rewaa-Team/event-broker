@@ -2,6 +2,7 @@ import { Message } from "@aws-sdk/client-sqs";
 import { EventEmitter } from "events";
 import {
   ConsumeOptions,
+  EmitBatchPayload,
   EmitPayload,
   EventListener,
   IBatchEmitOptions,
@@ -116,7 +117,13 @@ export class Emitter implements IEmitter {
   getInternalQueueName(topic: Topic): string {
     return this.emitter.getInternalQueueName(topic);
   }
-  getPayloadToEmit(eventName: string, options?: IEmitOptions, ...args: any[]): EmitPayload {
-    return this.emitter.getPayloadToEmit(eventName, options, args);
-  };
+  getEmitPayload(eventName: string, options?: IEmitOptions, ...args: any[]): EmitPayload {
+    return this.emitter.getEmitPayload(eventName, options, ...args);
+  }
+  getBatchEmitPayload(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions): EmitBatchPayload {
+    return this.emitter.getBatchEmitPayload(eventName, messages, options);
+  }
 }

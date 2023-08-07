@@ -1,7 +1,7 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest } from "@aws-sdk/client-sqs";
-import { PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
+import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest, SendMessageBatchRequest } from "@aws-sdk/client-sqs";
+import { PublishBatchInput, PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
 export interface Logger {
@@ -436,13 +436,21 @@ export interface IEmitter {
    */
   startConsumers(): Promise<void>;
   /**
-   * @return Returns an exact copy of payload send.
+   * @return Returns an exact copy of payload handed to aws client for sending.
    */
-  getPayloadToEmit(
+  getEmitPayload(
     eventName: string,
     options?: IEmitOptions,
     ...args: any[]
   ): EmitPayload;
+  /**
+   * @return Returns an exact copy of batch payload handed to aws client for sending.
+   */
+  getBatchEmitPayload(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): EmitBatchPayload;
 }
 
 export type ISNSMessage =  IMessage;
@@ -460,6 +468,8 @@ export interface ISNSReceiveMessage {
 }
 
 export type EmitPayload = SendMessageRequest | PublishInput;
+
+export type EmitBatchPayload = SendMessageBatchRequest | PublishBatchInput;
 
 export interface ICreateQueueLambdaEventSourceInput {
   functionName: string;

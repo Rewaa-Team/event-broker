@@ -29,10 +29,10 @@ export class SNSProducer {
     topicArn: string,
     message: ISNSMessage
   ): Promise<PublishResponse> => {
-    return await this.sns.publish(this.constructPublishResponse(topicArn, message));
+    return await this.sns.publish(this.getPublishInput(topicArn, message));
   };
 
-  constructPublishResponse(topicArn: string, message: ISNSMessage) {
+  getPublishInput(topicArn: string, message: ISNSMessage) {
     const params: PublishInput = {
       Message: JSON.stringify(message),
       TargetArn: topicArn,
@@ -51,6 +51,13 @@ export class SNSProducer {
     topicArn: string,
     messages: ISNSMessage[]
   ): Promise<PublishBatchResponse> => {
+    return await this.sns.publishBatch(this.getBatchPublishInputs(topicArn, messages));
+  };
+
+  getBatchPublishInputs(
+    topicArn: string,
+    messages: ISNSMessage[]
+  ): PublishBatchInput {
     const isFifo = this.isFifoTopic(topicArn);
     const params: PublishBatchInput = {
       TopicArn: topicArn,
@@ -66,9 +73,8 @@ export class SNSProducer {
         };
       }),
     };
-
-    return await this.sns.publishBatch(params);
-  };
+    return params;
+  }
 
   createTopic = async (
     topicName: string,

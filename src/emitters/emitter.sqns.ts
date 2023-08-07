@@ -33,6 +33,7 @@ import {
   Logger,
   IMessage,
   EmitPayload,
+  EmitBatchPayload,
 } from "../types";
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
@@ -319,17 +320,17 @@ export class SqnsEmitter implements IEmitter {
     return true;
   }
 
-  getPayloadToEmit(eventName: string, options?: IEmitOptions, ...args: any[]): EmitPayload {
+  getEmitPayload(
+    eventName: string,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): EmitPayload {
     const topic: Topic = {
       name: eventName,
       isFifo: !!options?.isFifo,
       exchangeType: options?.exchangeType || ExchangeType.Fanout,
       separateConsumerGroup: options?.consumerGroup,
     };
-    const queueOrTopic =
-      topic.exchangeType === ExchangeType.Queue
-        ? this.getQueueUrl(this.getQueueName(topic))
-        : this.getTopicArn(this.getTopicName(topic));
     const message: IMessage = {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
@@ -337,9 +338,15 @@ export class SqnsEmitter implements IEmitter {
       messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
     };
-    return topic.exchangeType === ExchangeType.Queue ? this.sqsProducer.constructQueueMessageRequest(queueOrTopic, message, {
+    if (topic.exchangeType === ExchangeType.Queue) {
+      const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+      return this.sqsProducer.getSendMessageRequestInput(queueUrl, message, {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
-      }) : this.snsProducer.constructPublishResponse(queueOrTopic, message);
+      });
+    } else {
+      const topicArn = this.getTopicArn(this.getTopicName(topic));
+      return this.snsProducer.getPublishInput(topicArn, message);
+    }
   }
 
   async emit(
@@ -426,6 +433,42 @@ export class SqnsEmitter implements IEmitter {
         wasSenderFault: failed.SenderFault,
       })) || []
     );
+  }
+
+  getBatchEmitPayload(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): EmitBatchPayload {
+    const topic: Topic = {
+      name: eventName,
+      isFifo: !!options?.isFifo,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
+      separateConsumerGroup: options?.consumerGroup,
+    };
+    const transformedMessages: IMessage[] = messages.map((message) => {
+      return {
+        data: [message.data],
+        deduplicationId: message.deduplicationId,
+        eventName: topic.name,
+        messageAttributes: message.MessageAttributes,
+        messageGroupId: message.partitionKey || topic.name,
+        id: message.id,
+      };
+    });
+    if (topic.exchangeType === ExchangeType.Queue) {
+      const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+      return this.sqsProducer.getBatchMessageRequests(
+        queueUrl,
+        transformedMessages.map((message) => ({
+          ...message,
+          delay: message.delay || DEFAULT_MESSAGE_DELAY,
+        }))
+      );
+    } else {
+      const topicArn = this.getTopicArn(this.getTopicName(topic));
+      return this.snsProducer.getBatchPublishInputs(topicArn, transformedMessages);
+    }
   }
 
   async emitBatch(

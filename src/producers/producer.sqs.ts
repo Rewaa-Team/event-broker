@@ -48,10 +48,12 @@ export class SQSProducer {
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
   ): Promise<SendMessageResult> => {
-    return await this.sqs.sendMessage(this.constructQueueMessageRequest(queueUrl, message, messageOptions));
+    return await this.sqs.sendMessage(
+      this.getSendMessageRequestInput(queueUrl, message, messageOptions)
+    );
   };
 
-  constructQueueMessageRequest(
+  getSendMessageRequestInput(
     queueUrl: string,
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
@@ -74,6 +76,13 @@ export class SQSProducer {
     queueUrl: string,
     messages: ISQSMessage[],
   ): Promise<SendMessageBatchResult> => {
+    return await this.sqs.sendMessageBatch(this.getBatchMessageRequests(queueUrl, messages));
+  };
+
+  getBatchMessageRequests(
+    queueUrl: string,
+    messages: ISQSMessage[]
+  ): SendMessageBatchRequest {
     const isFifo = this.isFifoQueue(queueUrl);
     const params: SendMessageBatchRequest = {
       Entries: messages.map((message) => {
@@ -90,9 +99,8 @@ export class SQSProducer {
       }),
       QueueUrl: queueUrl,
     };
-
-    return await this.sqs.sendMessageBatch(params);
-  };
+    return params;
+  }
 
   createQueue = async (
     queueName: string,
