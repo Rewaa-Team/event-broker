@@ -51,10 +51,10 @@ export class SNSProducer {
     topicArn: string,
     messages: ISNSMessage[]
   ): Promise<PublishBatchResponse> => {
-    return await this.sns.publishBatch(this.getBatchPublishInputs(topicArn, messages));
+    return await this.sns.publishBatch(this.getBatchPublishInput(topicArn, messages));
   };
 
-  getBatchPublishInputs(
+  getBatchPublishInput(
     topicArn: string,
     messages: ISNSMessage[]
   ): PublishBatchInput {

@@ -76,10 +76,10 @@ export class SQSProducer {
     queueUrl: string,
     messages: ISQSMessage[],
   ): Promise<SendMessageBatchResult> => {
-    return await this.sqs.sendMessageBatch(this.getBatchMessageRequests(queueUrl, messages));
+    return await this.sqs.sendMessageBatch(this.getBatchMessageRequest(queueUrl, messages));
   };
 
-  getBatchMessageRequests(
+  getBatchMessageRequest(
     queueUrl: string,
     messages: ISQSMessage[]
   ): SendMessageBatchRequest {

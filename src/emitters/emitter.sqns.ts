@@ -430,13 +430,13 @@ export class SqnsEmitter implements IEmitter {
     };
     if (topic.exchangeType === ExchangeType.Queue) {
       const queueUrl = this.getQueueUrl(this.getQueueName(topic));
-      return this.sqsProducer.getBatchMessageRequests(
+      return this.sqsProducer.getBatchMessageRequest(
         queueUrl,
         this.getBatchMessagesForQueue(topic.name, messages),
       );
     } else {
       const topicArn = this.getTopicArn(this.getTopicName(topic));
-      return this.snsProducer.getBatchPublishInputs(
+      return this.snsProducer.getBatchPublishInput(
         topicArn,
         this.getBatchMessagesForTopic(topic.name, messages)
       );
