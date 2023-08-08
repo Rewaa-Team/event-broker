@@ -300,10 +300,11 @@ export interface IEmitterOptions {
   };
   /**
    * Optional AWS Config used by the emitter when useExternalBroker is true
+   * @prop {accountId} when not provided it can be get with SDK
    */
   awsConfig?: {
     region: string;
-    accountId: string;
+    accountId?: string;
   };
   /**
    * Set to true to enable logging
