@@ -386,16 +386,7 @@ export class SqnsEmitter implements IEmitter {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     const result = await this.snsProducer.sendBatch(
       topicArn,
-      messages.map((message) => {
-        return {
-          data: [message.data],
-          deduplicationId: message.deduplicationId,
-          eventName: topic.name,
-          messageAttributes: message.MessageAttributes,
-          messageGroupId: message.partitionKey || topic.name,
-          id: message.id,
-        };
-      })
+      this.getTransformedMessagesForTopic(topic.name, messages)
     );
     return (
       result.Failed?.map((failed) => ({
@@ -414,19 +405,10 @@ export class SqnsEmitter implements IEmitter {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
       queueUrl,
-      messages.map((message) => {
-        return {
-          data: [message.data],
-          deduplicationId: message.deduplicationId,
-          eventName: topic.name,
-          messageAttributes: message.MessageAttributes,
-          messageGroupId: message.partitionKey || topic.name,
-          delay: message.delay || DEFAULT_MESSAGE_DELAY,
-          id: message.id,
-        };
-      })
+      this.getTransformedMessagesForQueue(topic.name, messages),
     );
-    return (result.Failed?.map((failed) => ({
+    return (
+      result.Failed?.map((failed) => ({
         id: failed.Id,
         code: failed.Code,
         message: failed.Message,
@@ -446,30 +428,45 @@ export class SqnsEmitter implements IEmitter {
       exchangeType: options?.exchangeType || ExchangeType.Fanout,
       separateConsumerGroup: options?.consumerGroup,
     };
-    const transformedMessages: IMessage[] = messages.map((message) => {
-      return {
-        data: [message.data],
-        deduplicationId: message.deduplicationId,
-        eventName: topic.name,
-        messageAttributes: message.MessageAttributes,
-        messageGroupId: message.partitionKey || topic.name,
-        id: message.id,
-      };
-    });
     if (topic.exchangeType === ExchangeType.Queue) {
       const queueUrl = this.getQueueUrl(this.getQueueName(topic));
       return this.sqsProducer.getBatchMessageRequests(
         queueUrl,
-        transformedMessages.map((message) => ({
-          ...message,
-          delay: message.delay || DEFAULT_MESSAGE_DELAY,
-        }))
+        this.getTransformedMessagesForQueue(topic.name, messages),
       );
     } else {
       const topicArn = this.getTopicArn(this.getTopicName(topic));
-      return this.snsProducer.getBatchPublishInputs(topicArn, transformedMessages);
+      return this.snsProducer.getBatchPublishInputs(
+        topicArn,
+        this.getTransformedMessagesForTopic(topic.name, messages)
+      );
     }
   }
+
+  private getTransformedMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
+    messages.map((message) => {
+      return {
+        data: [message.data],
+        deduplicationId: message.deduplicationId,
+        eventName: topicName,
+        messageAttributes: message.MessageAttributes,
+        messageGroupId: message.partitionKey || topicName,
+        id: message.id,
+        delay: message.delay || DEFAULT_MESSAGE_DELAY,
+      };
+    });
+
+  private getTransformedMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
+    messages.map((message) => {
+      return {
+        data: [message.data],
+        deduplicationId: message.deduplicationId,
+        eventName: topicName,
+        messageAttributes: message.MessageAttributes,
+        messageGroupId: message.partitionKey || topicName,
+        id: message.id,
+      };
+    });
 
   async emitBatch(
     eventName: string,
