@@ -386,7 +386,7 @@ export class SqnsEmitter implements IEmitter {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     const result = await this.snsProducer.sendBatch(
       topicArn,
-      this.getTransformedMessagesForTopic(topic.name, messages)
+      this.getBatchMessagesForTopic(topic.name, messages)
     );
     return (
       result.Failed?.map((failed) => ({
@@ -405,7 +405,7 @@ export class SqnsEmitter implements IEmitter {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
       queueUrl,
-      this.getTransformedMessagesForQueue(topic.name, messages),
+      this.getBatchMessagesForQueue(topic.name, messages),
     );
     return (
       result.Failed?.map((failed) => ({
@@ -432,18 +432,18 @@ export class SqnsEmitter implements IEmitter {
       const queueUrl = this.getQueueUrl(this.getQueueName(topic));
       return this.sqsProducer.getBatchMessageRequests(
         queueUrl,
-        this.getTransformedMessagesForQueue(topic.name, messages),
+        this.getBatchMessagesForQueue(topic.name, messages),
       );
     } else {
       const topicArn = this.getTopicArn(this.getTopicName(topic));
       return this.snsProducer.getBatchPublishInputs(
         topicArn,
-        this.getTransformedMessagesForTopic(topic.name, messages)
+        this.getBatchMessagesForTopic(topic.name, messages)
       );
     }
   }
 
-  private getTransformedMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
         data: [message.data],
@@ -456,7 +456,7 @@ export class SqnsEmitter implements IEmitter {
       };
     });
 
-  private getTransformedMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
         data: [message.data],
