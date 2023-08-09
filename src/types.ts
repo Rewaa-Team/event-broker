@@ -1,7 +1,7 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { MessageAttributeValue, SQSClientConfig, Message } from "@aws-sdk/client-sqs";
-import { SNSClientConfig } from "@aws-sdk/client-sns";
+import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest, SendMessageBatchRequest } from "@aws-sdk/client-sqs";
+import { PublishBatchInput, PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
 export interface Logger {
@@ -379,7 +379,7 @@ export interface IEmitter {
    * @param messages A list of messages received from topic
    * @param options ProcessMessageOptions
    * @returns An object containing a list of the messages that failed.
-   * This object is compatible with the return type required by lambda event 
+   * This object is compatible with the return type required by lambda event
    * source mapping and thus can be returned from the lambda directly
    */
   processMessages(
@@ -435,6 +435,22 @@ export interface IEmitter {
    * Start consuming the topics
    */
   startConsumers(): Promise<void>;
+  /**
+   * @return Returns an exact copy of payload handed to aws client for sending.
+   */
+  getEmitPayload(
+    eventName: string,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): EmitPayload;
+  /**
+   * @return Returns an exact copy of batch payload handed to aws client for sending.
+   */
+  getBatchEmitPayload(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): EmitBatchPayload;
 }
 
 export type ISNSMessage =  IMessage;
@@ -450,6 +466,14 @@ export interface ISNSReceiveMessage {
   Type: string;
   UnsubscribeURL: string;
 }
+
+export type QueueEmitPayload = SendMessageRequest;
+
+export type FanoutEmitPayload = PublishInput;
+
+export type EmitPayload = QueueEmitPayload | FanoutEmitPayload;
+
+export type EmitBatchPayload = SendMessageBatchRequest | PublishBatchInput;
 
 export interface ICreateQueueLambdaEventSourceInput {
   functionName: string;

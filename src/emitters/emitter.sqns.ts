@@ -31,6 +31,9 @@ import {
   FailedEventCategory,
   ProcessMessageContext,
   Logger,
+  IMessage,
+  EmitPayload,
+  EmitBatchPayload,
 } from "../types";
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
@@ -317,6 +320,35 @@ export class SqnsEmitter implements IEmitter {
     return true;
   }
 
+  getEmitPayload(
+    eventName: string,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): EmitPayload {
+    const topic: Topic = {
+      name: eventName,
+      isFifo: !!options?.isFifo,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
+      separateConsumerGroup: options?.consumerGroup,
+    };
+    const message: IMessage = {
+      messageGroupId: options?.partitionKey || topic.name,
+      eventName: topic.name,
+      data: args,
+      messageAttributes: options?.MessageAttributes,
+      deduplicationId: options?.deduplicationId,
+    };
+    if (topic.exchangeType === ExchangeType.Queue) {
+      const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+      return this.sqsProducer.getSendMessageRequestInput(queueUrl, message, {
+        delay: options?.delay || DEFAULT_MESSAGE_DELAY,
+      });
+    } else {
+      const topicArn = this.getTopicArn(this.getTopicName(topic));
+      return this.snsProducer.getPublishInput(topicArn, message);
+    }
+  }
+
   async emit(
     eventName: string,
     options?: IEmitOptions,
@@ -354,16 +386,7 @@ export class SqnsEmitter implements IEmitter {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     const result = await this.snsProducer.sendBatch(
       topicArn,
-      messages.map((message) => {
-        return {
-          data: [message.data],
-          deduplicationId: message.deduplicationId,
-          eventName: topic.name,
-          messageAttributes: message.MessageAttributes,
-          messageGroupId: message.partitionKey || topic.name,
-          id: message.id,
-        };
-      })
+      this.getBatchMessagesForTopic(topic.name, messages)
     );
     return (
       result.Failed?.map((failed) => ({
@@ -382,26 +405,68 @@ export class SqnsEmitter implements IEmitter {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
       queueUrl,
-      messages.map((message) => {
-        return {
-          data: [message.data],
-          deduplicationId: message.deduplicationId,
-          eventName: topic.name,
-          messageAttributes: message.MessageAttributes,
-          messageGroupId: message.partitionKey || topic.name,
-          delay: message.delay || DEFAULT_MESSAGE_DELAY,
-          id: message.id,
-        };
-      })
+      this.getBatchMessagesForQueue(topic.name, messages),
     );
-    return (result.Failed?.map((failed) => ({
-      id: failed.Id,
-      code: failed.Code,
-      message: failed.Message,
-      wasSenderFault: failed.SenderFault,
-    })) || []
+    return (
+      result.Failed?.map((failed) => ({
+        id: failed.Id,
+        code: failed.Code,
+        message: failed.Message,
+        wasSenderFault: failed.SenderFault,
+      })) || []
     );
   }
+
+  getBatchEmitPayload(
+    eventName: string,
+    messages: IBatchMessage[],
+    options?: IBatchEmitOptions
+  ): EmitBatchPayload {
+    const topic: Topic = {
+      name: eventName,
+      isFifo: !!options?.isFifo,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
+      separateConsumerGroup: options?.consumerGroup,
+    };
+    if (topic.exchangeType === ExchangeType.Queue) {
+      const queueUrl = this.getQueueUrl(this.getQueueName(topic));
+      return this.sqsProducer.getBatchMessageRequest(
+        queueUrl,
+        this.getBatchMessagesForQueue(topic.name, messages),
+      );
+    } else {
+      const topicArn = this.getTopicArn(this.getTopicName(topic));
+      return this.snsProducer.getBatchPublishInput(
+        topicArn,
+        this.getBatchMessagesForTopic(topic.name, messages)
+      );
+    }
+  }
+
+  private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
+    messages.map((message) => {
+      return {
+        data: [message.data],
+        deduplicationId: message.deduplicationId,
+        eventName: topicName,
+        messageAttributes: message.MessageAttributes,
+        messageGroupId: message.partitionKey || topicName,
+        id: message.id,
+        delay: message.delay || DEFAULT_MESSAGE_DELAY,
+      };
+    });
+
+  private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
+    messages.map((message) => {
+      return {
+        data: [message.data],
+        deduplicationId: message.deduplicationId,
+        eventName: topicName,
+        messageAttributes: message.MessageAttributes,
+        messageGroupId: message.partitionKey || topicName,
+        id: message.id,
+      };
+    });
 
   async emitBatch(
     eventName: string,
@@ -634,11 +699,11 @@ export class SqnsEmitter implements IEmitter {
 
     try {
       for (const listener of listeners) {
-        await listener(message.data, { 
+        await listener(message.data, {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
-         });
+        });
       }
     } catch (error: any) {
       this.logFailedEvent({

@@ -48,6 +48,16 @@ export class SQSProducer {
     message: ISQSMessage,
     messageOptions: ISQSMessageOptions
   ): Promise<SendMessageResult> => {
+    return await this.sqs.sendMessage(
+      this.getSendMessageRequestInput(queueUrl, message, messageOptions)
+    );
+  };
+
+  getSendMessageRequestInput(
+    queueUrl: string,
+    message: ISQSMessage,
+    messageOptions: ISQSMessageOptions
+  ) {
     const params: SendMessageRequest = {
       MessageBody: JSON.stringify(message),
       QueueUrl: queueUrl,
@@ -59,14 +69,20 @@ export class SQSProducer {
       params.MessageDeduplicationId = message.deduplicationId || v4();
       params.MessageGroupId = message.messageGroupId;
     }
-
-    return await this.sqs.sendMessage(params);
-  };
+    return params;
+  }
 
   sendBatch = async (
     queueUrl: string,
     messages: ISQSMessage[],
   ): Promise<SendMessageBatchResult> => {
+    return await this.sqs.sendMessageBatch(this.getBatchMessageRequest(queueUrl, messages));
+  };
+
+  getBatchMessageRequest(
+    queueUrl: string,
+    messages: ISQSMessage[]
+  ): SendMessageBatchRequest {
     const isFifo = this.isFifoQueue(queueUrl);
     const params: SendMessageBatchRequest = {
       Entries: messages.map((message) => {
@@ -83,9 +99,8 @@ export class SQSProducer {
       }),
       QueueUrl: queueUrl,
     };
-
-    return await this.sqs.sendMessageBatch(params);
-  };
+    return params;
+  }
 
   createQueue = async (
     queueName: string,
