@@ -38,6 +38,7 @@ import {
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
@@ -59,11 +60,7 @@ export class SqnsEmitter implements IEmitter {
   ) {
     this.options = options;
     this.logger = logger;
-    if (!this.options.awsConfig) {
-      throw new Error(
-        `awsConfig is required in options when using external broker.`
-      );
-    }
+    this.validateAwsConfig();
     this.localEmitter = options.localEmitter;
     this.snsProducer = new SNSProducer(
       this.logger,
@@ -90,6 +87,30 @@ export class SqnsEmitter implements IEmitter {
     await this.createQueues();
     await this.subscribeToTopics();
     await this.createEventSourceMappings();
+  }
+
+  private validateAwsConfig() {
+    if (!this.options.awsConfig) {
+      throw new Error(
+        `awsConfig is required in options when using external broker.`
+      );
+    } else {
+      const { region, accountId } = this.options.awsConfig;
+      if (!accountId)
+        this.getAwsAccountId(region).then((accountId) => {
+          this.options.awsConfig!.accountId = accountId;
+        }).catch((error) => {
+          console.error(error.message);
+          throw error;
+        });;
+    };
+  }
+
+  private async getAwsAccountId(region: string): Promise<string> {
+   const client = new STSClient({ region });
+   const accountId = (await client.send(new GetCallerIdentityCommand({}))).Account;
+   if (!accountId) throw new Error('No Account Id Found.');
+   return accountId;
   }
 
   private async createEventSourceMappings() {
