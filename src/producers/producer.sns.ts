@@ -29,6 +29,10 @@ export class SNSProducer {
     topicArn: string,
     message: ISNSMessage
   ): Promise<PublishResponse> => {
+    return await this.sns.publish(this.getPublishInput(topicArn, message));
+  };
+
+  getPublishInput(topicArn: string, message: ISNSMessage) {
     const params: PublishInput = {
       Message: JSON.stringify(message),
       TargetArn: topicArn,
@@ -40,14 +44,20 @@ export class SNSProducer {
     }
 
     params.MessageAttributes = message.messageAttributes;
-
-    return await this.sns.publish(params);
-  };
+    return params;
+  }
 
   sendBatch = async (
     topicArn: string,
     messages: ISNSMessage[]
   ): Promise<PublishBatchResponse> => {
+    return await this.sns.publishBatch(this.getBatchPublishInput(topicArn, messages));
+  };
+
+  getBatchPublishInput(
+    topicArn: string,
+    messages: ISNSMessage[]
+  ): PublishBatchInput {
     const isFifo = this.isFifoTopic(topicArn);
     const params: PublishBatchInput = {
       TopicArn: topicArn,
@@ -63,9 +73,8 @@ export class SNSProducer {
         };
       }),
     };
-
-    return await this.sns.publishBatch(params);
-  };
+    return params;
+  }
 
   createTopic = async (
     topicName: string,
@@ -113,6 +122,6 @@ export class SNSProducer {
       throw error;
     }
   };
-  
+
   isFifoTopic = (topicArn: string) => topicArn.includes(".fifo");
 }
