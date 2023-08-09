@@ -467,7 +467,11 @@ export interface ISNSReceiveMessage {
   UnsubscribeURL: string;
 }
 
-export type EmitPayload = SendMessageRequest | PublishInput;
+export type QueueEmitPayload = SendMessageRequest;
+
+export type FanoutEmitPayload = PublishInput;
+
+export type EmitPayload = QueueEmitPayload | FanoutEmitPayload;
 
 export type EmitBatchPayload = SendMessageBatchRequest | PublishBatchInput;
 
