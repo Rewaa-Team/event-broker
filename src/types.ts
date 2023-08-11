@@ -32,9 +32,9 @@ type Binary = Buffer | Uint8Array | Blob | string;
 export interface IMessageAttributes {
   DataType: "String" | "Number" | "Binary" | "String.Array";
   StringValue?: string;
-  BinaryValue?: Binary;
+  BinaryValue?: Uint8Array;
   StringListValues?: string[];
-  BinaryListValues?: Binary[];
+  BinaryListValues?: Uint8Array[];
 }
 
 export interface IEmitOptions {
