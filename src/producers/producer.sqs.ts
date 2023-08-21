@@ -143,7 +143,6 @@ export class SQSProducer {
           ? DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD
           : DEFAULT_MESSAGE_RETENTION_PERIOD)
       }`,
-      ContentBasedDeduplication: `${!!topic?.contentBasedDeduplication}`,
       Policy: JSON.stringify({
         Statement: [
           {
@@ -172,6 +171,7 @@ export class SQSProducer {
         queueAttributes.DeduplicationScope = "queue";
         queueAttributes.FifoThroughputLimit = "perQueue";
       }
+      queueAttributes.ContentBasedDeduplication = `${!!topic?.contentBasedDeduplication}`;
     }
     const queueUrl = await this.getQueueUrl(queueName);
     if (queueUrl) {
