@@ -225,6 +225,18 @@ export interface Topic {
    * Unit: s
    */
   retentionPeriod?: number;
+  /**
+   * Enable content based deduplication. Enabling it means that for messages that
+   * are sent without an explicit DeduplicationId AWS will generate it based on the
+   * message body using SHA 256 and use it for deduplication. Enabling this is required
+   * for interacting with some AWS services like dropping messages from the event bridge
+   * scheduler into the sqs queue
+   * 
+   * Is only effective for Fifo queues
+   * 
+   * Default value is false (off)
+   */
+  contentBasedDeduplication?: boolean;
 }
 
 export interface ILambdaHandler {

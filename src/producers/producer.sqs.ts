@@ -143,6 +143,7 @@ export class SQSProducer {
           ? DEFAULT_DLQ_MESSAGE_RETENTION_PERIOD
           : DEFAULT_MESSAGE_RETENTION_PERIOD)
       }`,
+      ContentBasedDeduplication: `${!!topic?.contentBasedDeduplication}`,
       Policy: JSON.stringify({
         Statement: [
           {

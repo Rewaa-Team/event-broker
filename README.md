@@ -194,6 +194,7 @@ Following table shows which properties are automatically updated when bootstrapp
 | separateConsumerGroup  | Yes, creates a new queue. Old one is not deleted  |
 | enableHighThroughput  | Yes  |
 | retentionPeriod  | Yes  |
+| contentBasedDeduplication  | Yes  |
 
 # Roadmap
 
