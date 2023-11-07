@@ -101,18 +101,25 @@ export class SNSProducer {
   subscribeToTopic = async (
     topicArn: string,
     queueArn: string,
-    filterPolicy?: any
+    filterPolicy?: object,
+    deliverRawMessage?: boolean,
   ): Promise<SubscribeResponse> => {
     const params: SubscribeInput = {
       TopicArn: topicArn,
       Protocol: "sqs",
       Endpoint: queueArn,
+      Attributes: {}
     };
 
-    if (filterPolicy) {
-      params.Attributes = {
-        FilterPolicy: JSON.stringify(filterPolicy),
-      };
+    if (params.Attributes) {
+      if(filterPolicy) {
+        params.Attributes.FilterPolicy = JSON.stringify(filterPolicy);
+      }
+      if(deliverRawMessage) {
+        params.Attributes.RawMessageDelivery = 'true';
+      } else {
+        params.Attributes.RawMessageDelivery = 'false';
+      }
     }
 
     try {

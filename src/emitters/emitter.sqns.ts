@@ -234,7 +234,8 @@ export class SqnsEmitter implements IEmitter {
             this.snsProducer.subscribeToTopic(
               topicArn,
               queueArn,
-              topic.filterPolicy
+              topic.filterPolicy,
+              topic.deliverRawMessage
             )
           );
         }
@@ -331,7 +332,7 @@ export class SqnsEmitter implements IEmitter {
       exchangeType: options?.exchangeType || ExchangeType.Fanout,
       separateConsumerGroup: options?.consumerGroup,
     };
-    const message: IMessage = {
+    const message: IMessage<any> = {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
       data: args,
@@ -361,10 +362,15 @@ export class SqnsEmitter implements IEmitter {
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
         separateConsumerGroup: options?.consumerGroup,
       };
+      let response = false;
+      const modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, args)) || args;
       if (topic.exchangeType === ExchangeType.Queue) {
-        return await this.emitToQueue(topic, options, ...args);
+        response = await this.emitToQueue(topic, options, ...modifiedArgs);
+      } else {
+        response = await this.emitToTopic(topic, options, ...args);
       }
-      return await this.emitToTopic(topic, options, ...args);
+      await this.options.hooks?.afterEmit?.(eventName, args);
+      return response;
     } catch (error) {
       this.logger.error(
         `Message producing failed: ${eventName} ${JSON.stringify(error)}`
@@ -665,14 +671,9 @@ export class SqnsEmitter implements IEmitter {
     queueUrl: string,
     executionContext: ProcessMessageContext,
   ) {
-    let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
     try {
-      snsMessage = JSON.parse(receivedMessage.Body!.toString());
-      message = snsMessage as any;
-      if (snsMessage.TopicArn) {
-        message = JSON.parse(snsMessage.Message);
-      }
+      message = this.parseDataFromMessage(receivedMessage);
     } catch (error) {
       this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
       this.logFailedEvent({
@@ -694,17 +695,19 @@ export class SqnsEmitter implements IEmitter {
         error: `No listener found`,
         executionContext,
       });
-      throw new Error(`No listener found`);
+      throw new Error(`No listener found for event: ${message.eventName}`);
     }
 
     try {
+      const data = await this.options.hooks?.beforeConsume?.(message.eventName, message.data);
       for (const listener of listeners) {
-        await listener(message.data, {
+        await listener(data || message.data, {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
         });
       }
+      await this.options.hooks?.afterConsume?.(message.eventName, message.data);
     } catch (error: any) {
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProcessingFailed,
@@ -717,6 +720,18 @@ export class SqnsEmitter implements IEmitter {
       error['executionTraceId'] = executionContext.executionTraceId;
       throw error;
     }
+  }
+
+  public parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
+    let snsMessage: ISNSReceiveMessage;
+    let message: ISQSMessage;
+    const body = receivedMessage.Body || (receivedMessage as any).body;
+    snsMessage = JSON.parse(body.toString());
+    message = snsMessage as any;
+    if (snsMessage.TopicArn) {
+      message = JSON.parse(snsMessage.Message);
+    }
+    return message as IMessage<T>;
   }
 
   private async deleteMessages(
@@ -862,12 +877,7 @@ export class SqnsEmitter implements IEmitter {
 
   private getQueueUrlFromMessage(message: Message): string {
     const receivedMessage = message as any;
-    let queueUrl =
-      receivedMessage.MessageAttributes?.QueueUrl.StringValue ||
-      receivedMessage.MessageAttributes?.QueueUrl.stringValue;
-    //Message was received in a lambda
-    queueUrl =
-      queueUrl || this.getQueueUrlFromARN(receivedMessage.eventSourceARN);
+    const queueUrl = this.getQueueUrlFromARN(receivedMessage.eventSourceARN);
     if (!queueUrl) {
       throw new Error(`QueueUrl or eventSourceARN not found in the message`);
     }

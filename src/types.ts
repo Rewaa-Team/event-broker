@@ -11,8 +11,8 @@ export interface Logger {
   info(message: any): void;
 }
 
-export interface IMessage {
-  data: any;
+export interface IMessage<T> {
+  data: T;
   eventName: string;
   messageGroupId?: string;
   messageAttributes?: { [key: string]: MessageAttributeValue };
@@ -21,7 +21,7 @@ export interface IMessage {
   delay?: number;
 }
 
-export type ISQSMessage = IMessage;
+export type ISQSMessage = IMessage<any>;
 
 export interface ISQSMessageOptions {
   delay: number;
@@ -237,6 +237,49 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
+  /**
+   * For Fanout based Topics, when this is set to true, the message is delivered
+   * in the format that SQS expects, as is
+   * When set to false, the message will be delivered with SNS Metadata as well
+   * The broker will parse both messages for the body
+   * 
+   * Refer: https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html
+   */
+  deliverRawMessage?: boolean;
+}
+
+export interface Hooks {
+  /**
+   * 
+   * @param topicName name of the topic on which beforeEmit was
+   * executed
+   * @param data the data with which emit was called
+   * @returns the data with any changes to be done before it's emitted
+   */
+  beforeEmit?<T>(topicName: string, data: T): Promise<T>;
+  /**
+   * 
+   * @param topicName name of the topic on which afterEmit was
+   * executed
+   * @param data the data with which emit was called
+   */
+  afterEmit?<T>(topicName: string, data: T): Promise<void>;
+  /**
+   * 
+   * @param topicName name of the topic on which beforeConsume was
+   * executed
+   * @param data the data with which the consumer function will be called
+   * @returns the data with any changes to be done before calling the consumer
+   * function
+   */
+  beforeConsume?<T>(topicName: string, data: T): Promise<T>;
+  /**
+   * 
+   * @param topicName name of the topic on which afterConsume will be
+   * executed
+   * @param data the data with which the consumer function was called
+   */
+  afterConsume?<T>(topicName: string, data: T): Promise<void>;
 }
 
 export interface ILambdaHandler {
@@ -257,15 +300,6 @@ export interface IEmitterOptions {
    * Set to true if using external broker as client
    */
   useExternalBroker?: boolean;
-  /**
-   * Optional, to log slow messages
-   *
-   * Unit: ms
-   *
-   * Default: 60000ms
-   * @deprecated Will be removed in future versions
-   */
-  maxProcessingTime?: number;
   /**
    * local, dev, stag, prod etc
    */
@@ -330,6 +364,12 @@ export interface IEmitterOptions {
    * log levels and mapping
    */
   logger?: Logger;
+  /**
+   * Optional global hooks that run on every topic
+   * make sure to catch any errors since the broker will throw
+   * if any of the hooks throws
+   */
+  hooks?: Hooks;
 }
 
 export type DefaultQueueOptions = Omit<
@@ -463,9 +503,15 @@ export interface IEmitter {
     messages: IBatchMessage[],
     options?: IBatchEmitOptions
   ): EmitBatchPayload;
+  /**
+   * 
+   * @param receivedMessage The message received from the consumer
+   * @returns The expected parsed data in the message as provided by the producer
+   */
+  parseDataFromMessage<T>(receivedMessage: Message): IMessage<T>;
 }
 
-export type ISNSMessage =  IMessage;
+export type ISNSMessage =  IMessage<any>;
 
 export interface ISNSReceiveMessage {
   Message: string;

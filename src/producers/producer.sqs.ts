@@ -284,7 +284,7 @@ export class SQSProducer {
 
   private getMessageAttributes(
     queueUrl: string,
-    message: IMessage
+    message: IMessage<any>
   ): Record<string, MessageAttributeValue> {
     return {
       ...(message.messageAttributes || {}),
