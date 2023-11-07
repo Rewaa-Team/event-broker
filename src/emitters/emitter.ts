@@ -12,6 +12,7 @@ import {
   IEmitterOptions,
   IFailedConsumerMessages,
   IFailedEmitBatchMessage,
+  IMessage,
   ProcessMessageOptions,
   Queue,
   Topic,
@@ -125,5 +126,8 @@ export class Emitter implements IEmitter {
     messages: IBatchMessage[],
     options?: IBatchEmitOptions): EmitBatchPayload {
     return this.emitter.getBatchEmitPayload(eventName, messages, options);
+  }
+  parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
+    return this.emitter.parseDataFromMessage(receivedMessage);
   }
 }

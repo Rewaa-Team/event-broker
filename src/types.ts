@@ -11,8 +11,8 @@ export interface Logger {
   info(message: any): void;
 }
 
-export interface IMessage {
-  data: any;
+export interface IMessage<T> {
+  data: T;
   eventName: string;
   messageGroupId?: string;
   messageAttributes?: { [key: string]: MessageAttributeValue };
@@ -21,7 +21,7 @@ export interface IMessage {
   delay?: number;
 }
 
-export type ISQSMessage = IMessage;
+export type ISQSMessage = IMessage<any>;
 
 export interface ISQSMessageOptions {
   delay: number;
@@ -237,6 +237,15 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
+  /**
+   * For Fanout based Topics, when this is set to true, the message is delivered
+   * in the format that SQS expects, as is
+   * When set to false, the message will be delivered with SNS Metadata as well
+   * The broker will parse both messages for the body
+   * 
+   * Refer: https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html
+   */
+  deliverRawMessage?: boolean;
 }
 
 export interface ILambdaHandler {
@@ -463,9 +472,15 @@ export interface IEmitter {
     messages: IBatchMessage[],
     options?: IBatchEmitOptions
   ): EmitBatchPayload;
+  /**
+   * 
+   * @param receivedMessage The message received from the consumer
+   * @returns The expected parsed data in the message as provided by the producer
+   */
+  parseDataFromMessage<T>(receivedMessage: Message): IMessage<T>;
 }
 
-export type ISNSMessage =  IMessage;
+export type ISNSMessage =  IMessage<any>;
 
 export interface ISNSReceiveMessage {
   Message: string;

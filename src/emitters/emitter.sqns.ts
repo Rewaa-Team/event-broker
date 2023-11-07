@@ -234,7 +234,8 @@ export class SqnsEmitter implements IEmitter {
             this.snsProducer.subscribeToTopic(
               topicArn,
               queueArn,
-              topic.filterPolicy
+              topic.filterPolicy,
+              topic.deliverRawMessage
             )
           );
         }
@@ -331,7 +332,7 @@ export class SqnsEmitter implements IEmitter {
       exchangeType: options?.exchangeType || ExchangeType.Fanout,
       separateConsumerGroup: options?.consumerGroup,
     };
-    const message: IMessage = {
+    const message: IMessage<any> = {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
       data: args,
@@ -665,14 +666,9 @@ export class SqnsEmitter implements IEmitter {
     queueUrl: string,
     executionContext: ProcessMessageContext,
   ) {
-    let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
     try {
-      snsMessage = JSON.parse(receivedMessage.Body!.toString());
-      message = snsMessage as any;
-      if (snsMessage.TopicArn) {
-        message = JSON.parse(snsMessage.Message);
-      }
+      message = this.parseDataFromMessage(receivedMessage);
     } catch (error) {
       this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
       this.logFailedEvent({
@@ -717,6 +713,18 @@ export class SqnsEmitter implements IEmitter {
       error['executionTraceId'] = executionContext.executionTraceId;
       throw error;
     }
+  }
+
+  public parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
+    let snsMessage: ISNSReceiveMessage;
+    let message: ISQSMessage;
+    const body = receivedMessage.Body || (receivedMessage as any).body;
+    snsMessage = JSON.parse(body.toString());
+    message = snsMessage as any;
+    if (snsMessage.TopicArn) {
+      message = JSON.parse(snsMessage.Message);
+    }
+    return message as IMessage<T>;
   }
 
   private async deleteMessages(
@@ -862,12 +870,7 @@ export class SqnsEmitter implements IEmitter {
 
   private getQueueUrlFromMessage(message: Message): string {
     const receivedMessage = message as any;
-    let queueUrl =
-      receivedMessage.MessageAttributes?.QueueUrl.StringValue ||
-      receivedMessage.MessageAttributes?.QueueUrl.stringValue;
-    //Message was received in a lambda
-    queueUrl =
-      queueUrl || this.getQueueUrlFromARN(receivedMessage.eventSourceARN);
+    const queueUrl = this.getQueueUrlFromARN(receivedMessage.eventSourceARN);
     if (!queueUrl) {
       throw new Error(`QueueUrl or eventSourceARN not found in the message`);
     }
