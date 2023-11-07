@@ -362,10 +362,15 @@ export class SqnsEmitter implements IEmitter {
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
         separateConsumerGroup: options?.consumerGroup,
       };
+      let response = false;
+      const modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, args)) || args;
       if (topic.exchangeType === ExchangeType.Queue) {
-        return await this.emitToQueue(topic, options, ...args);
+        response = await this.emitToQueue(topic, options, ...modifiedArgs);
+      } else {
+        response = await this.emitToTopic(topic, options, ...args);
       }
-      return await this.emitToTopic(topic, options, ...args);
+      await this.options.hooks?.afterEmit?.(eventName, args);
+      return response;
     } catch (error) {
       this.logger.error(
         `Message producing failed: ${eventName} ${JSON.stringify(error)}`
@@ -690,17 +695,19 @@ export class SqnsEmitter implements IEmitter {
         error: `No listener found`,
         executionContext,
       });
-      throw new Error(`No listener found`);
+      throw new Error(`No listener found for event: ${message.eventName}`);
     }
 
     try {
+      const data = await this.options.hooks?.beforeConsume?.(message.eventName, message.data);
       for (const listener of listeners) {
-        await listener(message.data, {
+        await listener(data || message.data, {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
         });
       }
+      await this.options.hooks?.afterConsume?.(message.eventName, message.data);
     } catch (error: any) {
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProcessingFailed,
