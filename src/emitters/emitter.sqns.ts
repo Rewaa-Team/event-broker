@@ -80,6 +80,28 @@ export class SqnsEmitter implements IEmitter {
     this.addDefaultQueues();
   }
 
+  private getUniqueKeyForTopicListener(eventName: string, queueName: string) {
+    return `${eventName}-${queueName}`
+  }
+
+  private getTopicListeners(eventName: string, queueName: string) {
+    return this.topicListeners.get(
+      this.getUniqueKeyForTopicListener(eventName, queueName)
+    )
+  }
+
+  private addTopicListener(eventName: string, queueName: string, listener: EventListener<any>) {
+    const listeners = this.getTopicListeners(
+      eventName,
+      queueName
+    ) ?? [];
+    listeners.push(listener);
+    this.topicListeners.set(
+      this.getUniqueKeyForTopicListener(eventName, queueName),
+      listeners
+    )
+  }
+
   async bootstrap(topics?: Topic[]) {
     if (topics?.length) {
       topics.forEach((topic) => {
@@ -606,12 +628,27 @@ export class SqnsEmitter implements IEmitter {
     this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
   };
 
-  removeListener(eventName: string, listener: EventListener<any>) {
-    this.topicListeners.delete(eventName);
+  removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions) {
+    const topic = this.getTopicFromEventNameAndConsumeOptions(
+      eventName,
+      consumeOptions
+    );
+    const queueName = this.getQueueName(topic);
+    this.topicListeners.delete(
+      this.getUniqueKeyForTopicListener(eventName, queueName)
+    );
   }
 
   removeAllListener() {
     this.topicListeners.clear();
+  }
+
+  private getTopicFromEventNameAndConsumeOptions(eventName: string, options?: ConsumeOptions): Topic {
+    return {
+      ...options,
+      name: eventName,
+      exchangeType: options?.exchangeType || ExchangeType.Fanout,
+    };
   }
 
   on(
@@ -619,16 +656,10 @@ export class SqnsEmitter implements IEmitter {
     listener: EventListener<any>,
     options?: ConsumeOptions
   ) {
-    let listeners = this.topicListeners.get(eventName) || [];
-    listeners.push(listener);
-    this.topicListeners.set(eventName, listeners);
-    const topic: Topic = {
-      ...options,
-      name: eventName,
-      exchangeType: options?.exchangeType || ExchangeType.Fanout,
-    };
-    this.topics.set(eventName, topic);
+    const topic = this.getTopicFromEventNameAndConsumeOptions(eventName, options)
     const queueName = this.getQueueName(topic);
+    this.addTopicListener(eventName, queueName, listener);
+    this.topics.set(eventName, topic);
     if (!this.queues.has(queueName)) {
       if (
         !topic.separateConsumerGroup &&
@@ -685,7 +716,12 @@ export class SqnsEmitter implements IEmitter {
       });
       throw new Error(`Failed to parse message`);
     }
-    const listeners = this.topicListeners.get(message.eventName);
+    const listeners = this.getTopicListeners(
+      message.eventName,
+      this.getQueueNameFromUrl(
+        queueUrl
+      )
+    );
     if (!listeners) {
       this.logger.error(`No listener found. Trace Id: ${executionContext.executionTraceId}. Message: ${JSON.stringify(message)}`);
       this.logFailedEvent({
@@ -835,10 +871,9 @@ export class SqnsEmitter implements IEmitter {
     if (!message.MessageAttributes) {
       message.MessageAttributes = (message as any).messageAttributes;
     }
+    const queueUrl = options?.queueReference || this.getQueueUrlFromMessage(message);
     let deleteOptions: MessageDeleteOptions | undefined;
     if (options?.shouldDeleteMessage) {
-      const queueUrl =
-        options.queueReference || this.getQueueUrlFromMessage(message);
       deleteOptions = {
         queueUrl,
         receiptHandle: message.ReceiptHandle!,
@@ -846,7 +881,7 @@ export class SqnsEmitter implements IEmitter {
     }
     return await this.handleMessageReceipt(
       message,
-      message.Attributes?.QueueUrl || CUSTOM_HANDLER_NAME,
+      queueUrl,
       deleteOptions
     );
   }
@@ -902,5 +937,10 @@ export class SqnsEmitter implements IEmitter {
   private getMessageIdFromMessage(message: Message): string {
     const messageId = message.MessageId || (message as any).messageId;
     return messageId;
+  }
+
+  private getQueueNameFromUrl(queueUrl: string) {
+    const urlParts = queueUrl.split('/')
+    return urlParts[urlParts.length - 1]
   }
 }
