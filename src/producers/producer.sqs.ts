@@ -27,6 +27,7 @@ import {
   DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MAX_RETRIES,
   DEFAULT_VISIBILITY_TIMEOUT,
+  PAYLOAD_STRUCTURE_VERSION_V2,
 } from "../constants";
 import { v4 } from "uuid";
 
@@ -295,6 +296,10 @@ export class SQSProducer {
       QueueUrl: {
         DataType: "String",
         StringValue: queueUrl,
+      },
+      PayloadVersion: {
+        DataType: "String",
+        StringValue: PAYLOAD_STRUCTURE_VERSION_V2,
       },
     };
   }

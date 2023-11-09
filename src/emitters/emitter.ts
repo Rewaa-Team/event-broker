@@ -43,10 +43,10 @@ export class Emitter implements IEmitter {
   async emit(
     eventName: string,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any,
   ): Promise<boolean> {
     if (this.options.useExternalBroker) {
-      return await this.emitter.emit(eventName, options, ...args);
+      return await this.emitter.emit(eventName, options, payload);
     }
     return false;
   }

@@ -11,6 +11,7 @@ import {
 } from "@aws-sdk/client-sns";
 import { ISNSMessage, Logger } from "../types";
 import { v4 } from "uuid";
+import { PAYLOAD_STRUCTURE_VERSION_V2 } from "../constants";
 
 export class SNSProducer {
   private readonly sns: SNS;
@@ -43,8 +44,20 @@ export class SNSProducer {
       params.MessageGroupId = message.messageGroupId;
     }
 
-    params.MessageAttributes = message.messageAttributes;
+    params.MessageAttributes = this.getMessageAttributesForPublish(message.messageAttributes);
     return params;
+  }
+
+  private getMessageAttributesForPublish(
+    messageAttributes: ISNSMessage['messageAttributes']
+  ): ISNSMessage['messageAttributes'] {
+    return {
+      ...messageAttributes,
+      PayloadVersion: {
+        DataType: "String",
+        StringValue: PAYLOAD_STRUCTURE_VERSION_V2,
+      },
+    };
   }
 
   sendBatch = async (
@@ -65,7 +78,7 @@ export class SNSProducer {
         return {
           Id: message.id!,
           Message: JSON.stringify(message),
-          MessageAttributes: message.messageAttributes,
+          MessageAttributes: this.getMessageAttributesForPublish(message.messageAttributes),
           ...(isFifo && {
             MessageDeduplicationId: message.deduplicationId || v4(),
             MessageGroupId: message.messageGroupId,
