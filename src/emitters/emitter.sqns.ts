@@ -378,6 +378,7 @@ export class SqnsEmitter implements IEmitter {
     options?: IEmitOptions,
     payload?: any
   ): Promise<boolean> {
+    let modifiedArgs: any;
     try {
       const topic: Topic = {
         name: eventName,
@@ -386,13 +387,13 @@ export class SqnsEmitter implements IEmitter {
         separateConsumerGroup: options?.consumerGroup,
       };
       let response = false;
-      const modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
+      modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
       if (topic.exchangeType === ExchangeType.Queue) {
         response = await this.emitToQueue(topic, options, modifiedArgs);
       } else {
-        response = await this.emitToTopic(topic, options, payload);
+        response = await this.emitToTopic(topic, options, modifiedArgs);
       }
-      await this.options.hooks?.afterEmit?.(eventName, payload);
+      await this.options.hooks?.afterEmit?.(eventName, modifiedArgs);
       return response;
     } catch (error) {
       this.logger.error(
@@ -401,7 +402,7 @@ export class SqnsEmitter implements IEmitter {
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProducingFailed,
         topic: eventName,
-        event: payload,
+        event: modifiedArgs ?? payload,
         error: error,
       });
       throw error;
