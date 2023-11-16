@@ -719,7 +719,9 @@ export class SqnsEmitter implements IEmitter {
       throw new Error(`Failed to parse message`);
     }
 
-    const payloadStructureVersion = message.messageAttributes?.PayloadVersion.StringValue;
+    const payloadStructureVersion =
+      message.messageAttributes?.PayloadVersion?.StringValue ||
+      (message.messageAttributes?.PayloadVersion as any)?.stringValue;
 
     if (payloadStructureVersion !== PAYLOAD_STRUCTURE_VERSION_V2) {
       message.data = message.data[0]
