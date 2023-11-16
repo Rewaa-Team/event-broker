@@ -258,7 +258,7 @@ export class SqnsEmitter implements IEmitter {
               topicArn,
               queueArn,
               topic.filterPolicy,
-              topic.deliverRawMessage
+              true
             )
           );
         }
@@ -776,6 +776,8 @@ export class SqnsEmitter implements IEmitter {
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
     }
+    // TODO: Remove message.messageAttributes in future release
+    message.messageAttributes = receivedMessage.MessageAttributes || message.messageAttributes; 
     return message as IMessage<T>;
   }
 
