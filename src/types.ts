@@ -237,15 +237,6 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
-  /**
-   * For Fanout based Topics, when this is set to true, the message is delivered
-   * in the format that SQS expects, as is
-   * When set to false, the message will be delivered with SNS Metadata as well
-   * The broker will parse both messages for the body
-   * 
-   * Refer: https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html
-   */
-  deliverRawMessage?: boolean;
 }
 
 export interface Hooks {
@@ -383,7 +374,7 @@ export interface MessageMetaData {
   messageAttributes?: { [key: string]: MessageAttributeValue };
 }
 
-export type EventListener<T> = (args: T[], metadata?: MessageMetaData) => Promise<void>;
+export type EventListener<T> = (args: T, metadata?: MessageMetaData) => Promise<void>;
 
 export interface IEmitter {
   /**
@@ -395,7 +386,7 @@ export interface IEmitter {
   emit(
     eventName: string,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any
   ): Promise<boolean>;
   /**
    * @param eventName Name of the topic/event to emit in batch
@@ -413,7 +404,7 @@ export interface IEmitter {
     options?: ConsumeOptions
   ): void;
   removeAllListener(): void;
-  removeListener(eventName: string, listener: EventListener<any>): void;
+  removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions): void;
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
@@ -493,7 +484,7 @@ export interface IEmitter {
   getEmitPayload(
     eventName: string,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any
   ): EmitPayload;
   /**
    * @return Returns an exact copy of batch payload handed to aws client for sending.
@@ -523,6 +514,7 @@ export interface ISNSReceiveMessage {
   TopicArn: string;
   Type: string;
   UnsubscribeURL: string;
+  MessageAttributes: { [key: string]: MessageAttributeValue };
 }
 
 export type QueueEmitPayload = SendMessageRequest;

@@ -6,6 +6,7 @@ import {
   DEFAULT_MESSAGE_DELAY,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
+  PAYLOAD_STRUCTURE_VERSION_V2,
   SOURCE_QUEUE_PREFIX,
   TOPIC_SUBSCRIBE_CHUNK_SIZE,
 } from "../constants";
@@ -257,7 +258,7 @@ export class SqnsEmitter implements IEmitter {
               topicArn,
               queueArn,
               topic.filterPolicy,
-              topic.deliverRawMessage
+              true
             )
           );
         }
@@ -308,7 +309,7 @@ export class SqnsEmitter implements IEmitter {
   async emitToTopic(
     topic: Topic,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any,
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     await this.snsProducer.send(topicArn, {
@@ -316,7 +317,7 @@ export class SqnsEmitter implements IEmitter {
       eventName: topic.name,
       messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
-      data: args,
+      data: payload,
     });
     return true;
   }
@@ -324,7 +325,7 @@ export class SqnsEmitter implements IEmitter {
   async emitToQueue(
     topic: Topic,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any
   ): Promise<boolean> {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     await this.sqsProducer.send(
@@ -332,7 +333,7 @@ export class SqnsEmitter implements IEmitter {
       {
         messageGroupId: options?.partitionKey || topic.name,
         eventName: topic.name,
-        data: args,
+        data: payload,
         messageAttributes: options?.MessageAttributes,
         deduplicationId: options?.deduplicationId,
       },
@@ -346,7 +347,7 @@ export class SqnsEmitter implements IEmitter {
   getEmitPayload(
     eventName: string,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any
   ): EmitPayload {
     const topic: Topic = {
       name: eventName,
@@ -357,7 +358,7 @@ export class SqnsEmitter implements IEmitter {
     const message: IMessage<any> = {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
-      data: args,
+      data: payload,
       messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
     };
@@ -375,8 +376,9 @@ export class SqnsEmitter implements IEmitter {
   async emit(
     eventName: string,
     options?: IEmitOptions,
-    ...args: any[]
+    payload?: any
   ): Promise<boolean> {
+    let modifiedArgs: any;
     try {
       const topic: Topic = {
         name: eventName,
@@ -385,13 +387,13 @@ export class SqnsEmitter implements IEmitter {
         separateConsumerGroup: options?.consumerGroup,
       };
       let response = false;
-      const modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, args)) || args;
+      modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
       if (topic.exchangeType === ExchangeType.Queue) {
-        response = await this.emitToQueue(topic, options, ...modifiedArgs);
+        response = await this.emitToQueue(topic, options, modifiedArgs);
       } else {
-        response = await this.emitToTopic(topic, options, ...args);
+        response = await this.emitToTopic(topic, options, modifiedArgs);
       }
-      await this.options.hooks?.afterEmit?.(eventName, args);
+      await this.options.hooks?.afterEmit?.(eventName, modifiedArgs);
       return response;
     } catch (error) {
       this.logger.error(
@@ -400,10 +402,10 @@ export class SqnsEmitter implements IEmitter {
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProducingFailed,
         topic: eventName,
-        event: args,
+        event: modifiedArgs ?? payload,
         error: error,
       });
-      return false;
+      throw error;
     }
   }
 
@@ -716,6 +718,15 @@ export class SqnsEmitter implements IEmitter {
       });
       throw new Error(`Failed to parse message`);
     }
+
+    const payloadStructureVersion =
+      message.messageAttributes?.PayloadVersion?.StringValue ||
+      (message.messageAttributes?.PayloadVersion as any)?.stringValue;
+
+    if (payloadStructureVersion !== PAYLOAD_STRUCTURE_VERSION_V2) {
+      message.data = message.data[0]
+    }
+
     const listeners = this.getTopicListeners(
       message.eventName,
       this.getQueueNameFromUrl(
@@ -767,6 +778,11 @@ export class SqnsEmitter implements IEmitter {
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
     }
+    // TODO: Remove message.messageAttributes in future release
+    message.messageAttributes =
+      receivedMessage.MessageAttributes ||
+      (receivedMessage as any).messageAttributes ||
+      message.messageAttributes; 
     return message as IMessage<T>;
   }
 
