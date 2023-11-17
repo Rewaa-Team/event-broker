@@ -837,7 +837,9 @@ export class SqnsEmitter implements IEmitter {
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     const results = await Promise.allSettled(
-      messages.map((message) => this.processMessage(message))
+      messages.map((message) => this.processMessage(message, {
+        queueReference: options?.queueReference,
+      }))
     );
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
