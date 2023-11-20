@@ -128,15 +128,25 @@ export class SNSProducer {
       if(filterPolicy) {
         params.Attributes.FilterPolicy = JSON.stringify(filterPolicy);
       }
-      if(deliverRawMessage) {
-        params.Attributes.RawMessageDelivery = 'true';
-      } else {
-        params.Attributes.RawMessageDelivery = 'false';
-      }
     }
 
     try {
-      return await this.sns.subscribe(params);
+      const response = await this.sns.subscribe(params);
+      /**
+       * Always setting attributes after creating subscribtion
+       * This is done to avoid having to filter subscriptions to check
+       * if they exist
+       */
+      if(response.SubscriptionArn) {
+        if(deliverRawMessage) {
+          await this.sns.setSubscriptionAttributes({
+            SubscriptionArn: response.SubscriptionArn,
+            AttributeName: 'RawMessageDelivery',
+            AttributeValue: 'true'
+          });
+        }
+      }
+      return response;
     } catch (error) {
       this.logger.error(`Topic subscription failed: ${queueArn} to ${topicArn}`);
       throw error;

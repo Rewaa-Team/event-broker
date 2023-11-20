@@ -5,6 +5,7 @@ import {
   EmitBatchPayload,
   EmitPayload,
   EventListener,
+  ExchangeType,
   IBatchEmitOptions,
   IBatchMessage,
   IEmitOptions,
