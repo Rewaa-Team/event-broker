@@ -27,7 +27,7 @@ import {
   DEFAULT_MESSAGE_RETENTION_PERIOD,
   DEFAULT_MAX_RETRIES,
   DEFAULT_VISIBILITY_TIMEOUT,
-  PAYLOAD_STRUCTURE_VERSION_V2,
+  PAYLOAD_STRUCTURE_VERSION_V1,
 } from "../constants";
 import { v4 } from "uuid";
 
@@ -60,7 +60,12 @@ export class SQSProducer {
     messageOptions: ISQSMessageOptions
   ) {
     const params: SendMessageRequest = {
-      MessageBody: JSON.stringify(message),
+      MessageBody: JSON.stringify(
+        /**
+         * @todo Un-array this when switching to payload version 2
+         */
+        [message]
+      ),
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
       MessageAttributes: this.getMessageAttributes(queueUrl, message),
@@ -91,7 +96,10 @@ export class SQSProducer {
           Id: message.id!,
           DelaySeconds: message.delay,
           MessageAttributes: this.getMessageAttributes(queueUrl, message),
-          MessageBody: JSON.stringify(message),
+          /**
+           * @todo Un-array this when switching to payload version 2
+           */
+          MessageBody: JSON.stringify([message]),
           ...(isFifo && {
             MessageDeduplicationId: message.deduplicationId || v4(),
             MessageGroupId: message.messageGroupId,
@@ -299,7 +307,7 @@ export class SQSProducer {
       },
       PayloadVersion: {
         DataType: "String",
-        StringValue: PAYLOAD_STRUCTURE_VERSION_V2,
+        StringValue: PAYLOAD_STRUCTURE_VERSION_V1,
       },
     };
   }

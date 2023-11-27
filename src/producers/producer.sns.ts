@@ -11,7 +11,7 @@ import {
 } from "@aws-sdk/client-sns";
 import { ISNSMessage, Logger } from "../types";
 import { v4 } from "uuid";
-import { PAYLOAD_STRUCTURE_VERSION_V2 } from "../constants";
+import { PAYLOAD_STRUCTURE_VERSION_V1 } from "../constants";
 
 export class SNSProducer {
   private readonly sns: SNS;
@@ -35,7 +35,12 @@ export class SNSProducer {
 
   getPublishInput(topicArn: string, message: ISNSMessage) {
     const params: PublishInput = {
-      Message: JSON.stringify(message),
+      Message: JSON.stringify(
+        /**
+         * @todo Un-array this when switching to payload version 2
+         */
+        [message]
+      ),
       TargetArn: topicArn,
     };
 
@@ -55,7 +60,7 @@ export class SNSProducer {
       ...messageAttributes,
       PayloadVersion: {
         DataType: "String",
-        StringValue: PAYLOAD_STRUCTURE_VERSION_V2,
+        StringValue: PAYLOAD_STRUCTURE_VERSION_V1,
       },
     };
   }
@@ -77,7 +82,10 @@ export class SNSProducer {
       PublishBatchRequestEntries: messages.map((message) => {
         return {
           Id: message.id!,
-          Message: JSON.stringify(message),
+          /**
+           * @todo Un-array this when switching to payload version 2
+           */
+          Message: JSON.stringify([message]),
           MessageAttributes: this.getMessageAttributesForPublish(message.messageAttributes),
           ...(isFifo && {
             MessageDeduplicationId: message.deduplicationId || v4(),

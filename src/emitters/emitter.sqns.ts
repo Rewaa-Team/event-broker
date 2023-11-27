@@ -476,7 +476,7 @@ export class SqnsEmitter implements IEmitter {
   private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
-        data: [message.data],
+        data: message.data,
         deduplicationId: message.deduplicationId,
         eventName: topicName,
         messageAttributes: message.MessageAttributes,
@@ -489,7 +489,7 @@ export class SqnsEmitter implements IEmitter {
   private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
-        data: [message.data],
+        data: message.data,
         deduplicationId: message.deduplicationId,
         eventName: topicName,
         messageAttributes: message.MessageAttributes,
