@@ -36,10 +36,7 @@ export class SNSProducer {
   getPublishInput(topicArn: string, message: ISNSMessage) {
     const params: PublishInput = {
       Message: JSON.stringify(
-        /**
-         * @todo Un-array this when switching to payload version 2
-         */
-        [message]
+        message
       ),
       TargetArn: topicArn,
     };
@@ -82,10 +79,7 @@ export class SNSProducer {
       PublishBatchRequestEntries: messages.map((message) => {
         return {
           Id: message.id!,
-          /**
-           * @todo Un-array this when switching to payload version 2
-           */
-          Message: JSON.stringify([message]),
+          Message: JSON.stringify(message),
           MessageAttributes: this.getMessageAttributesForPublish(message.messageAttributes),
           ...(isFifo && {
             MessageDeduplicationId: message.deduplicationId || v4(),

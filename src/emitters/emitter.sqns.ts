@@ -317,7 +317,10 @@ export class SqnsEmitter implements IEmitter {
       eventName: topic.name,
       messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
-      data: payload,
+      /**
+       * @todo Un-array this when switching to payload version 2
+       */
+      data: [payload],
     });
     return true;
   }
@@ -333,7 +336,10 @@ export class SqnsEmitter implements IEmitter {
       {
         messageGroupId: options?.partitionKey || topic.name,
         eventName: topic.name,
-        data: payload,
+        /**
+         * @todo Un-array this when switching to payload version 2
+         */
+        data: [payload],
         messageAttributes: options?.MessageAttributes,
         deduplicationId: options?.deduplicationId,
       },
@@ -358,7 +364,10 @@ export class SqnsEmitter implements IEmitter {
     const message: IMessage<any> = {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
-      data: payload,
+      /**
+       * @todo Un-array this when switching to payload version 2
+       */
+      data: [payload],
       messageAttributes: options?.MessageAttributes,
       deduplicationId: options?.deduplicationId,
     };
@@ -476,7 +485,10 @@ export class SqnsEmitter implements IEmitter {
   private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
-        data: message.data,
+        /**
+         * @todo Un-array this when switching to payload version 2
+         */
+        data: [message.data],
         deduplicationId: message.deduplicationId,
         eventName: topicName,
         messageAttributes: message.MessageAttributes,
@@ -489,7 +501,10 @@ export class SqnsEmitter implements IEmitter {
   private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
     messages.map((message) => {
       return {
-        data: message.data,
+        /**
+         * @todo Un-array this when switching to payload version 2
+         */
+        data: [message.data],
         deduplicationId: message.deduplicationId,
         eventName: topicName,
         messageAttributes: message.MessageAttributes,

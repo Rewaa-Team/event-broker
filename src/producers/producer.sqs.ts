@@ -61,10 +61,7 @@ export class SQSProducer {
   ) {
     const params: SendMessageRequest = {
       MessageBody: JSON.stringify(
-        /**
-         * @todo Un-array this when switching to payload version 2
-         */
-        [message]
+        message
       ),
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
@@ -96,10 +93,7 @@ export class SQSProducer {
           Id: message.id!,
           DelaySeconds: message.delay,
           MessageAttributes: this.getMessageAttributes(queueUrl, message),
-          /**
-           * @todo Un-array this when switching to payload version 2
-           */
-          MessageBody: JSON.stringify([message]),
+          MessageBody: JSON.stringify(message),
           ...(isFifo && {
             MessageDeduplicationId: message.deduplicationId || v4(),
             MessageGroupId: message.messageGroupId,
