@@ -406,7 +406,10 @@ export class SqnsEmitter implements IEmitter {
       return response;
     } catch (error) {
       this.logger.error(
-        `Message producing failed: ${eventName} ${JSON.stringify(error)}`
+        `Message producing failed: 
+        Event Name: ${eventName} 
+        Payload: ${payload ? JSON.stringify(payload) : undefined}
+        Error ${JSON.stringify(error)}`
       );
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProducingFailed,
