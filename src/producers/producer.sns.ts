@@ -144,7 +144,7 @@ export class SNSProducer {
           await this.sns.setSubscriptionAttributes({
             SubscriptionArn: response.SubscriptionArn,
             AttributeName: 'RawMessageDelivery',
-            AttributeValue: 'true'
+            AttributeValue: 'false'
           });
         }
       }
