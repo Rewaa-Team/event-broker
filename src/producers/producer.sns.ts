@@ -140,13 +140,13 @@ export class SNSProducer {
        * if they exist
        */
       if(response.SubscriptionArn) {
-        if(deliverRawMessage) {
-          await this.sns.setSubscriptionAttributes({
-            SubscriptionArn: response.SubscriptionArn,
-            AttributeName: 'RawMessageDelivery',
-            AttributeValue: 'true'
-          });
-        }
+        // if(deliverRawMessage) {
+        //   await this.sns.setSubscriptionAttributes({
+        //     SubscriptionArn: response.SubscriptionArn,
+        //     AttributeName: 'RawMessageDelivery',
+        //     AttributeValue: 'true'
+        //   });
+        // }
       }
       return response;
     } catch (error) {
