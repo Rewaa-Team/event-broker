@@ -81,9 +81,14 @@ export interface IEmitOptions {
    * minite interval will be discarded.
    */
   deduplicationId?: string;
+  /**
+   * Anything that is required by the save function to save the outbox events to the consumer service outbox table
+   * e.g transaction, entity manager etc
+   */
+  outboxData?: Record<string, any>;
 }
 
-export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'>;
+export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup' | 'outboxData'>;
 
 export type IBatchMessage = Omit<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'> & {
   data: any;
@@ -361,6 +366,15 @@ export interface IEmitterOptions {
    * if any of the hooks throws
    */
   hooks?: Hooks;
+  /**
+   * Optional global outbox options
+   * If provided, the broker will save the events to the outbox table
+   */
+  outboxConfig?: OutboxConfig;
+  /**
+   * The name of your service
+   */
+  serviceName: string;
 }
 
 export type DefaultQueueOptions = Omit<
@@ -588,4 +602,60 @@ export interface ProcessMessageContext {
    * @description Similar to @see executionTraceId but provided by aws
    */
   receiptHandler?: string;
+}
+
+export interface OutboxConfig {
+  /**
+   * saving the events to the consumer service's outbox table
+   */
+  save: <T>(outboxData: OutboxData<T>) => Promise<void>;
+
+  /**
+   * gets events usings ids from outbox table on consumer service
+   * and emits the events
+   * @param ids ulids of the events to be emitted
+   */
+  processOutboxEvents: (data: OutboxEventPayload) => Promise<OutboxEvent[]>;
+
+  /**
+   * An optional name of the queue that processes the outbox events
+   */
+  consumerName?: string;  
+
+  /**
+   * The delay before the outbox events are sent to outbox queue
+   * 
+   * unit: s
+   * default: 5s
+   */
+  delay?: number;
+
+  /**
+   * Optional consume options for the outbox queue
+   */
+  consumeOptions?: ConsumeOptions;
+}
+
+export interface OutboxData<T> {
+  events: OutboxEvent[];
+  config: T;
+}
+
+export interface OutboxEvent {
+  /**
+   * ulid
+   */
+  id: string;
+  topicName: string;
+  payload: any;
+  options: Omit<IEmitOptions, 'outboxData'>;
+  isBatch: boolean;
+}
+
+export interface OutboxEventPayload {
+  /**
+   * ulid array
+   */
+  ids: string[];
+  isFifo: boolean;
 }

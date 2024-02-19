@@ -1,9 +1,10 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
 import {
-  CUSTOM_HANDLER_NAME,
   DEFAULT_BATCH_SIZE,
   DEFAULT_MESSAGE_DELAY,
+  DEFAULT_OUTBOX_TOPIC_DELAY,
+  DEFAULT_OUTBOX_TOPIC_NAME,
   DEFAULT_VISIBILITY_TIMEOUT,
   DLQ_PREFIX,
   PAYLOAD_STRUCTURE_VERSION_V2,
@@ -35,6 +36,8 @@ import {
   IMessage,
   EmitPayload,
   EmitBatchPayload,
+  OutboxEvent,
+  OutboxEventPayload,
 } from "../types";
 import { SubscribeResponse } from '@aws-sdk/client-sns';
 import { Message } from '@aws-sdk/client-sqs';
@@ -42,6 +45,8 @@ import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
+import { ulid } from "ulid";
+import { info } from "console";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -78,7 +83,8 @@ export class SqnsEmitter implements IEmitter {
       this.logger,
       this.options.lambdaConfig || { ...this.options.awsConfig }
     );
-    this.addDefaultQueues();
+    this.addDefaultTopics();
+    this.addOutboxTopic();
   }
 
   private getUniqueKeyForTopicListener(eventName: string, queueName: string) {
@@ -142,7 +148,7 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private addDefaultQueues() {
+  private addDefaultTopics() {
     if (!this.options.defaultQueueOptions) {
       this.logger.info(`No default queues specified.`);
       return;
@@ -157,6 +163,25 @@ export class SqnsEmitter implements IEmitter {
       isDefaultQueue: true,
       exchangeType: ExchangeType.Queue,
     });
+  }
+
+  private addOutboxTopic() {
+    if (this.options.outboxConfig) {
+      const name = this.options.outboxConfig.consumerName ?? DEFAULT_OUTBOX_TOPIC_NAME;
+      this.topics.set(name, {
+        name,
+        isFifo: true,
+        exchangeType: ExchangeType.Queue,
+      });
+      this.topics.set(name, {
+        name,
+        isFifo: false,
+        exchangeType: ExchangeType.Queue,
+      });
+
+      // dummy event listener because the outbox event is processed by this.options.outboxConfig.processOutboxEvents()
+      this.on(name, async () => {}, this.options.outboxConfig.consumeOptions)
+    }
   }
 
   private async createTopic(topic: Topic) {
@@ -389,6 +414,9 @@ export class SqnsEmitter implements IEmitter {
   ): Promise<boolean> {
     let modifiedArgs: any;
     try {
+      if (options?.outboxData) {
+        return await this.saveEventToOutbox(eventName, options, payload);
+      }
       const topic: Topic = {
         name: eventName,
         isFifo: !!options?.isFifo,
@@ -522,6 +550,10 @@ export class SqnsEmitter implements IEmitter {
     options?: IBatchEmitOptions
   ): Promise<IFailedEmitBatchMessage[]> {
     try {
+      if (options?.outboxData) {
+        await this.saveEventToOutbox(eventName, options, messages, true);
+        return [];
+      }
       const topic: Topic = {
         name: eventName,
         isFifo: !!options?.isFifo,
@@ -745,6 +777,12 @@ export class SqnsEmitter implements IEmitter {
       message.data = message.data[0]
     }
 
+    const outboxEventName = this.options.outboxConfig?.consumerName || DEFAULT_OUTBOX_TOPIC_NAME;
+    if (message.eventName === outboxEventName) {
+      await this.handleOutboxEvent(message.data)
+      return;
+    }
+
     const listeners = this.getTopicListeners(
       message.eventName,
       this.getQueueNameFromUrl(
@@ -785,6 +823,18 @@ export class SqnsEmitter implements IEmitter {
       error['executionTraceId'] = executionContext.executionTraceId;
       throw error;
     }
+  }
+  private async handleOutboxEvent(data: OutboxEventPayload) {
+    const outboxEvents = (await this.options.outboxConfig?.processOutboxEvents(data)) || [];
+    const outboxPromises: Array<Promise<IFailedEmitBatchMessage[]>|Promise<boolean>> = []
+    outboxEvents.forEach((event) => {
+      if (event.isBatch) {
+        outboxPromises.push(this.emitBatch(event.topicName, event.payload, event.options));
+      } else {
+        outboxPromises.push(this.emit(event.topicName, event.payload, event.options));
+      }
+    })
+    await Promise.allSettled(outboxPromises);
   }
 
   public parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
@@ -978,5 +1028,51 @@ export class SqnsEmitter implements IEmitter {
   private getQueueNameFromUrl(queueUrl: string) {
     const urlParts = queueUrl.split('/')
     return urlParts[urlParts.length - 1]
+  }
+
+  private async saveEventToOutbox(
+    eventName: string,
+    options: IEmitOptions | IBatchEmitOptions,
+    payload?: any,
+    isBatch = false,
+  ): Promise<boolean> {
+    const { outboxData: _outboxData, ...emitOptions } = options;
+    const ids = [ulid()];
+
+    const outboxEvent: OutboxEvent = {
+      topicName: eventName,
+      id: ids[0],
+      payload,
+      options: emitOptions,
+      isBatch,
+    }
+    await this.options.outboxConfig!.save({
+      events: [outboxEvent],
+      config: options.outboxData!,
+    })
+    const outboxTopicName = this.getOutboxTopicName(options.isFifo);
+    const emitOptionsForOutbox = this.getOutboxEmitOptions(options);
+    const outboxEventPayload: OutboxEventPayload = {
+      ids,
+      isFifo: options.isFifo,
+    }
+    await this.emit(outboxTopicName, emitOptionsForOutbox, outboxEventPayload);
+    return true;
+  }
+
+  private getOutboxTopicName(isFifo: boolean): string {
+    const fifoSuffix = isFifo ? ".fifo" : "";
+    if (this.options.outboxConfig!.consumerName) {
+      return `${this.options.outboxConfig!.consumerName}${fifoSuffix}`;
+    }
+    return `${this.options.environment}_${this.options.serviceName}_${DEFAULT_OUTBOX_TOPIC_NAME}${fifoSuffix}`;
+  }
+
+  private getOutboxEmitOptions(options: IEmitOptions): IEmitOptions {
+    return {
+      ...options,
+      exchangeType: ExchangeType.Queue,
+      delay: this.options.outboxConfig?.delay || DEFAULT_OUTBOX_TOPIC_DELAY,
+    }
   }
 }
