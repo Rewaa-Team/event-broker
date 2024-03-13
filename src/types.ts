@@ -4,11 +4,19 @@ import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest, Se
 import { PublishBatchInput, PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 
+export type LogI =
+  | {
+      msg: string;
+      error?: unknown;
+      [x: string]: unknown;
+    }
+  | string;
+
 export interface Logger {
-  error(error: any): void;
-  warn(message: any): void;
-  debug(message: any): void;
-  info(message: any): void;
+  error(error: LogI): void;
+  warn(message: LogI): void;
+  debug(message: LogI): void;
+  info(message: LogI): void;
 }
 
 export interface IMessage<T> {

@@ -405,12 +405,12 @@ export class SqnsEmitter implements IEmitter {
       await this.options.hooks?.afterEmit?.(eventName, modifiedArgs);
       return response;
     } catch (error) {
-      this.logger.error(
-        `Message producing failed: 
-        Event Name: ${eventName} 
-        Payload: ${payload ? JSON.stringify(payload) : undefined}
-        Error ${JSON.stringify(error)}`
-      );
+      this.logger.error({
+        msg: `Message producing failed`,
+        event: eventName,
+        payload,
+        error,
+      });
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProducingFailed,
         topic: eventName,
@@ -534,7 +534,12 @@ export class SqnsEmitter implements IEmitter {
       return await this.emitBatchToTopic(topic, messages);
     } catch (error) {
       this.logger.error(
-        `Batch Message producing failed: ${eventName} ${JSON.stringify(error)}`
+        {
+          msg: `Batch Message producing failed`,
+          event: eventName,
+          messages,
+          error,
+        },
       );
       throw error;
     }
@@ -580,7 +585,11 @@ export class SqnsEmitter implements IEmitter {
     });
 
     queue.consumer.on("error", (error, message) => {
-      this.logger.error(`Queue error ${JSON.stringify(error)}`);
+      this.logger.error({
+        msg: `Queue error`,
+        error,
+        message,
+      });
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueError,
         topic: "",
@@ -590,7 +599,11 @@ export class SqnsEmitter implements IEmitter {
     });
 
     queue.consumer.on("processing_error", (error, message) => {
-      this.logger.error(`Queue Processing error ${JSON.stringify(error)}`);
+      this.logger.error({
+        msg: `Queue processing error`,
+        error,
+        message,
+      });
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueProcessingError,
         topic: "",
@@ -635,17 +648,64 @@ export class SqnsEmitter implements IEmitter {
       messageId: message.MessageId,
       receiptHandler: message.ReceiptHandle,
     };
-    this.logger.info(
-      `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
-    );
-    await this.onMessageReceived(message, queueUrl, executionContext);
-    if (deleteOptions) {
-      await this.sqsProducer.deleteMessage(
-        deleteOptions.queueUrl,
-        deleteOptions.receiptHandle
+
+    let parsedMessage: ISQSMessage;
+
+    try {
+      parsedMessage = this.parseDataFromMessage(message);
+    } catch (error) {
+      this.logger.error(
+        {
+          msg: `Failed to parse message`,
+          error,
+          queueUrl,
+          executionContext,
+          message,
+        }
       );
+      this.logFailedEvent({
+        failureType: FailedEventCategory.IncomingMessageFailedToParse,
+        topicReference: queueUrl,
+        event: message,
+        error: `Failed to parse message`,
+        executionContext,
+      });
+      throw new Error(`Failed to parse message`);
     }
-    this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
+
+    this.logger.info({
+      executionContext,
+      queueUrl,
+      msg: `Message started`,
+      body: parsedMessage,
+    });
+
+    try {
+      await this.onMessageReceived(parsedMessage, queueUrl, executionContext);
+      if (deleteOptions) {
+        await this.sqsProducer.deleteMessage(
+          deleteOptions.queueUrl,
+          executionContext,
+        );
+      }
+  
+      this.logger.info({
+        executionContext,
+        queueUrl,
+        msg: `Message ended`,
+      });  
+    } catch (error) {
+      this.logger.error(
+        {
+          msg: `Message failed`,
+          error,
+          queueUrl,
+          executionContext,
+          message: parsedMessage,
+        }
+      );
+      throw error;
+    }
   };
 
   removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions) {
@@ -718,25 +778,10 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async onMessageReceived(
-    receivedMessage: Message,
+    message: ISQSMessage,
     queueUrl: string,
     executionContext: ProcessMessageContext,
   ) {
-    let message: ISQSMessage;
-    try {
-      message = this.parseDataFromMessage(receivedMessage);
-    } catch (error) {
-      this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
-      this.logFailedEvent({
-        failureType: FailedEventCategory.IncomingMessageFailedToParse,
-        topicReference: queueUrl,
-        event: receivedMessage.Body,
-        error: `Failed to parse message`,
-        executionContext,
-      });
-      throw new Error(`Failed to parse message`);
-    }
-
     const payloadStructureVersion =
       message.messageAttributes?.PayloadVersion?.StringValue ||
       (message.messageAttributes?.PayloadVersion as any)?.stringValue;
@@ -752,7 +797,11 @@ export class SqnsEmitter implements IEmitter {
       )
     );
     if (!listeners) {
-      this.logger.error(`No listener found. Trace Id: ${executionContext.executionTraceId}. Message: ${JSON.stringify(message)}`);
+      this.logger.error({
+        msg: `No listener found`,
+        executionContext,
+        message,
+      });
       this.logFailedEvent({
         failureType: FailedEventCategory.NoListenerFound,
         topic: message.eventName,
@@ -781,8 +830,6 @@ export class SqnsEmitter implements IEmitter {
         error: error,
         executionContext,
       });
-      // Doing this because i don't want to mess with stack trace of rethrowing error
-      error['executionTraceId'] = executionContext.executionTraceId;
       throw error;
     }
   }
@@ -834,11 +881,6 @@ export class SqnsEmitter implements IEmitter {
         batchItemFailures: [],
       };
     } catch (error: any) {
-      this.logger.error(
-        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${error['executionTraceId'] ?? ''} :: ${JSON.stringify(
-          messages[i]
-        )}`
-      );
       return {
         batchItemFailures: messages.slice(i, undefined).map((message) => {
           return {

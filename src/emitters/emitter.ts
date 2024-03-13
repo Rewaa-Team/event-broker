@@ -30,7 +30,7 @@ export class Emitter implements IEmitter {
 
   constructor(options: IEmitterOptions) {
     this.options = options;
-    this.logger = options.logger ?? new Logger(!!this.options.log);
+    this.logger = options.logger ?? new Logger(!!this.options.log, this.options.environment);
     if (this.options.useExternalBroker) {
       this.emitter = new SqnsEmitter(this.logger, this.options, );
     }

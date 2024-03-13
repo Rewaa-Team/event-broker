@@ -48,9 +48,7 @@ export class LambdaClient {
       return await this.client.createEventSourceMapping(params);
     } catch (error: any) {
       this.logger.error(
-        `Event Source Mapping Creation failed: Function: ${
-          input.functionName
-        } ${JSON.stringify(error)}`
+        `Event Source Mapping Creation failed: Function: ${input.functionName}`
       );
       if (error?.name === "ResourceConflictException") {
         this.logger.warn(

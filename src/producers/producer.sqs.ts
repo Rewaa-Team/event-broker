@@ -19,6 +19,7 @@ import {
   ISQSMessage,
   ISQSMessageOptions,
   Logger,
+  ProcessMessageContext,
   Topic,
 } from "../types";
 import {
@@ -217,17 +218,20 @@ export class SQSProducer {
 
   deleteMessage = async (
     queueUrl: string,
-    receiptHandle: string
+    executionContext: ProcessMessageContext,
   ): Promise<boolean> => {
     const params: DeleteMessageRequest = {
       QueueUrl: queueUrl,
-      ReceiptHandle: receiptHandle,
+      ReceiptHandle: executionContext.receiptHandler,
     };
     try {
       await this.sqs.deleteMessage(params);
       return true;
     } catch (error) {
-      this.logger.error(`Message deletion failed: ${queueUrl} - ${receiptHandle}`);
+      this.logger.error({
+        msg: `Message deletion failed: ${queueUrl} `,
+        executionContext,
+      });
       throw error;
     }
   };
@@ -247,9 +251,10 @@ export class SQSProducer {
       await this.sqs.deleteMessageBatch(params);
       return true;
     } catch (error) {
-      this.logger.error(
-        `Batch message deletion failed: ${queueUrl} - ${receiptHandles}`
-      );
+      this.logger.error({
+        msg: `Batch message deletion failed: ${queueUrl} `,
+        receiptHandles,
+      });
       throw error;
     }
   };
@@ -262,7 +267,10 @@ export class SQSProducer {
       const result = await this.sqs.getQueueUrl(params);
       return result.QueueUrl;
     } catch (error) {
-      this.logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
+      this.logger.error({
+        msg: `Queue not found, creating new: ${queueName}`,
+        error,
+      });
       return undefined;
     }
   };
