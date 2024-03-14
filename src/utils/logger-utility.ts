@@ -23,27 +23,25 @@ export class LoggerUtility {
     return log;
   }
 
-  public error(message: LogI) {
+  private log(message: LogI, level: keyof ILogger) {
     if (this.logsEnabled) {
-      this.loggerClient.error(this.processLog(message));
+      this.loggerClient[level](this.processLog(message));
     }
+  }
+
+  public error(message: LogI) {
+    this.log(message, "error");
   }
 
   public warn(message: LogI) {
-    if (this.logsEnabled) {
-      this.loggerClient.warn(this.processLog(message));
-    }
+    this.log(message, "warn");
   }
 
   public debug(message: LogI) {
-    if (this.logsEnabled) {
-      this.loggerClient.debug(this.processLog(message));
-    }
+    this.log(message, "debug");
   }
 
   public info(message: LogI) {
-    if (this.logsEnabled) {
-      this.loggerClient.info(this.processLog(message));
-    }
+    this.log(message, "info");
   }
 }
