@@ -5,12 +5,13 @@ import {
   CreateEventSourceMappingRequest,
   ListEventSourceMappingsRequest,
 } from "@aws-sdk/client-lambda";
-import { ICreateQueueLambdaEventSourceInput, Logger } from "../types";
+import { ICreateQueueLambdaEventSourceInput } from "../types";
+import { LoggerUtility } from "./logger-utility";
 
 export class LambdaClient {
   private readonly lambda: Lambda;
   constructor(
-    private readonly logger: Logger,
+    private readonly logger: LoggerUtility,
     config: LambdaClientConfig
   ) {
     this.lambda = new Lambda(config);

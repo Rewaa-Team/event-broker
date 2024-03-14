@@ -31,7 +31,6 @@ import {
   IFailedConsumerMessages,
   FailedEventCategory,
   ProcessMessageContext,
-  Logger,
   IMessage,
   EmitPayload,
   EmitBatchPayload,
@@ -42,6 +41,7 @@ import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
+import { LoggerUtility } from "../utils/logger-utility";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -55,7 +55,7 @@ export class SqnsEmitter implements IEmitter {
   private consumersStarted: boolean = false;
 
   constructor(
-    private readonly logger: Logger,
+    private readonly logger: LoggerUtility,
     options: IEmitterOptions
   ) {
     this.options = options;

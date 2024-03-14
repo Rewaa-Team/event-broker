@@ -5,7 +5,6 @@ import {
   EmitBatchPayload,
   EmitPayload,
   EventListener,
-  ExchangeType,
   IBatchEmitOptions,
   IBatchMessage,
   IEmitOptions,
@@ -19,18 +18,21 @@ import {
   Topic,
 } from "../types";
 import { SqnsEmitter } from "./emitter.sqns";
-import { Logger as ILogger } from "../types";
-import { Logger } from "../utils/logger-client";
+import { LoggerClient } from "../utils/logger-client";
+import { LoggerUtility } from "../utils/logger-utility";
 
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter = new EventEmitter();
   private emitter!: IEmitter;
   private options!: IEmitterOptions;
-  private logger: ILogger;
+  private logger: LoggerUtility;
 
   constructor(options: IEmitterOptions) {
     this.options = options;
-    this.logger = options.logger ?? new Logger(!!this.options.log, this.options.environment);
+    this.logger = new LoggerUtility(
+      options.logger ?? new LoggerClient(options.environment),
+      options.log
+    );
     if (this.options.useExternalBroker) {
       this.emitter = new SqnsEmitter(this.logger, this.options, );
     }

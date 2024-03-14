@@ -9,14 +9,15 @@ import {
   PublishBatchResponse,
   PublishBatchInput
 } from "@aws-sdk/client-sns";
-import { ISNSMessage, Logger } from "../types";
+import { ISNSMessage } from "../types";
 import { v4 } from "uuid";
 import { PAYLOAD_STRUCTURE_VERSION_V1 } from "../constants";
+import { LoggerUtility } from "../utils/logger-utility";
 
 export class SNSProducer {
   private readonly sns: SNS;
   constructor(
-    private readonly logger: Logger,
+    private readonly logger: LoggerUtility,
     config: SNSClientConfig
   ) {
     this.sns = new SNS(config);

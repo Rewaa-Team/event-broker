@@ -18,7 +18,6 @@ import {
   IMessage,
   ISQSMessage,
   ISQSMessageOptions,
-  Logger,
   ProcessMessageContext,
   Topic,
 } from "../types";
@@ -31,11 +30,12 @@ import {
   PAYLOAD_STRUCTURE_VERSION_V1,
 } from "../constants";
 import { v4 } from "uuid";
+import { LoggerUtility } from "../utils/logger-utility";
 
 export class SQSProducer {
   private readonly sqs: SQS;
   constructor(
-    private readonly logger: Logger,
+    private readonly logger: LoggerUtility,
     config: SQSClientConfig
   ) {
     this.sqs = new SQS(config);
