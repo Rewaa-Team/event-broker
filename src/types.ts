@@ -188,6 +188,11 @@ export interface Topic {
    */
   separateConsumerGroup?: string;
   /**
+   * An optional tells that the consumer is fifo or not.
+   * if not provided, the broker will use the topic's isFifo
+   */
+  isConsumerFifo?: boolean;
+  /**
    * An optional Lambda function specification
    *
    * When specified, the broker will create an event source

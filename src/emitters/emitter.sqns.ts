@@ -271,8 +271,13 @@ export class SqnsEmitter implements IEmitter {
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
     let qName: string = "";
+    const queuePrefix = isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX;
     if (topic.separateConsumerGroup) {
       qName = topic.separateConsumerGroup;
+      if (topic.isConsumerFifo !== undefined)
+        return `${this.options.environment}_${queuePrefix}_${qName}${
+          topic.isConsumerFifo ? '.fifo' : ''
+        }`;
     } else {
       if (topic.isFifo) {
         qName = this.options.defaultQueueOptions?.fifo.name || "";
@@ -287,9 +292,7 @@ export class SqnsEmitter implements IEmitter {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${
-      isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
-    }_${qName}${topic.isFifo ? ".fifo" : ""}`;
+    return `${this.options.environment}_${queuePrefix}_${qName}${topic.isFifo ? ".fifo" : ""}`;
   };
 
   private getTopicName = (topic: Topic): string => {
