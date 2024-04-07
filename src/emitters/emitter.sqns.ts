@@ -274,10 +274,6 @@ export class SqnsEmitter implements IEmitter {
     const queuePrefix = isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX;
     if (topic.separateConsumerGroup) {
       qName = topic.separateConsumerGroup;
-      if (topic.isConsumerFifo !== undefined)
-        return `${this.options.environment}_${queuePrefix}_${qName}${
-          topic.isConsumerFifo ? '.fifo' : ''
-        }`;
     } else {
       if (topic.isFifo) {
         qName = this.options.defaultQueueOptions?.fifo.name || "";
@@ -292,7 +288,7 @@ export class SqnsEmitter implements IEmitter {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${queuePrefix}_${qName}${topic.isFifo ? ".fifo" : ""}`;
+    return `${this.options.environment}_${queuePrefix}_${qName}${this.checkIfConsumerIsFifo(topic) ? ".fifo" : ""}`;
   };
 
   private getTopicName = (topic: Topic): string => {
@@ -703,7 +699,7 @@ export class SqnsEmitter implements IEmitter {
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
               "",
-        isFifo: !!topic.isFifo,
+        isFifo: this.checkIfConsumerIsFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
           topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -718,6 +714,11 @@ export class SqnsEmitter implements IEmitter {
     } else {
       this.queues.get(queueName)?.allTopics.push(topic);
     }
+  }
+
+  private checkIfConsumerIsFifo(topic: Pick<Topic, 'isConsumerFifo' | 'isFifo'>): boolean {
+    if (topic.isConsumerFifo !== undefined) return !!topic.isConsumerFifo;
+    return !!topic.isFifo;
   }
 
   private async onMessageReceived(
