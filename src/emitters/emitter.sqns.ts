@@ -290,7 +290,9 @@ export class SqnsEmitter implements IEmitter {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${queuePrefix}_${qName}${this.checkIfConsumerIsFifo(topic) ? ".fifo" : ""}`;
+    return `${this.options.environment}_${queuePrefix}_${qName}${
+      this.isConsumerFifo(topic) ? '.fifo' : ''
+    }`;
   };
 
   private getTopicName = (topic: Topic): string => {
@@ -701,7 +703,7 @@ export class SqnsEmitter implements IEmitter {
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
               '',
-        isFifo: this.checkIfConsumerIsFifo(topic),
+        isFifo: this.isConsumerFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
           topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -718,8 +720,8 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private getSeparateConsumer(consumer: Pick<Topic, 'separateConsumerGroup' | 'consumerGroup'>): string | undefined {
-    const { separateConsumerGroup, consumerGroup } = consumer;
+  private getSeparateConsumer(topic: Topic): string | undefined {
+    const { separateConsumerGroup, consumerGroup } = topic;
     if (separateConsumerGroup && consumerGroup)
       throw new Error(
         `separateConsumerGroup and consumerGroup cannot be used together`
@@ -727,7 +729,7 @@ export class SqnsEmitter implements IEmitter {
     return separateConsumerGroup || consumerGroup?.name;
   }
 
-  private checkIfConsumerIsFifo(topic: Pick<Topic, 'consumerGroup' | 'isFifo'>): boolean {
+  private isConsumerFifo(topic: Topic): boolean {
     if (topic.consumerGroup !== undefined) return !!topic.consumerGroup.isFifo;
     return !!topic.isFifo;
   }
