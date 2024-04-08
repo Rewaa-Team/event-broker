@@ -187,6 +187,7 @@ export interface Topic {
    * will consume the messages from this topic. When not provided,
    * the broker will subscribe the default queue to this topic. If
    * the default queue is not specified, an error will be thrown.
+   * @deprecated Use consumerGroup instead
    */
   separateConsumerGroup?: string;
 
@@ -195,7 +196,7 @@ export interface Topic {
    * Use this when consumer configuration is different from the topic
    * 
    * When specified, the broker will consume the messages from this
-   * otherwise the broker will subscribe the default queue to this topi
+   * otherwise the broker will subscribe the default queue to this topic
    */
   consumerGroup?: ConsumerOptions;
 
