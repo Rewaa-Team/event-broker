@@ -37,6 +37,8 @@ export interface IMessageAttributes {
   BinaryListValues?: Uint8Array[];
 }
 
+export type ConsumerOptions = Omit<Topic, 'separateConsumerGroup' | 'exchangeType'>;
+
 export interface IEmitOptions {
   /**
    * Set to true when emitting to fifo topic
@@ -172,7 +174,7 @@ export interface Topic {
 
   /**
    * Topic level DLQ specification
-   * 
+   *
    * Set to true to create a corresponding DLQ
    */
   deadLetterQueueEnabled?: boolean;
@@ -181,17 +183,22 @@ export interface Topic {
    *
    * Set if you want to use a separate consumer group
    *
-   * Used to identify the queue from which the consumer 
+   * Used to identify the queue from which the consumer
    * will consume the messages from this topic. When not provided,
-   * the broker will subscribe the default queue to this topic. If 
-   * the default queue is not specified, an error will be thrown
+   * the broker will subscribe the default queue to this topic. If
+   * the default queue is not specified, an error will be thrown.
    */
   separateConsumerGroup?: string;
+
   /**
-   * An optional tells that the consumer is fifo or not.
-   * if not provided, the broker will use the topic's isFifo
+   * An optional consumer group specification
+   * Use this when consumer configuration is different from the topic
+   * 
+   * When specified, the broker will consume the messages from this
+   * otherwise the broker will subscribe the default queue to this topi
    */
-  isConsumerFifo?: boolean;
+  consumerGroup?: ConsumerOptions;
+
   /**
    * An optional Lambda function specification
    *
@@ -222,11 +229,11 @@ export interface Topic {
   enableHighThroughput?: boolean;
   /**
    * Retention time for messages in the queue of this topic
-   * 
+   *
    * Valid Values: An integer from 60 seconds (1 minute) to 1,209,600 seconds (14 days)
-   * 
+   *
    * Default is 1 Day
-   * 
+   *
    * Unit: s
    */
   retentionPeriod?: number;
@@ -236,9 +243,9 @@ export interface Topic {
    * message body using SHA 256 and use it for deduplication. Enabling this is required
    * for interacting with some AWS services like dropping messages from the event bridge
    * scheduler into the sqs queue
-   * 
+   *
    * Is only effective for Fifo queues
-   * 
+   *
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;

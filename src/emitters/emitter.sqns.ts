@@ -272,8 +272,10 @@ export class SqnsEmitter implements IEmitter {
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
     let qName: string = "";
     const queuePrefix = isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX;
-    if (topic.separateConsumerGroup) {
-      qName = topic.separateConsumerGroup;
+    const { exchangeType } = topic;
+    const separateConsumerGroup = this.getSeparateConsumer(topic);
+    if (separateConsumerGroup) {
+      qName = separateConsumerGroup;
     } else {
       if (topic.isFifo) {
         qName = this.options.defaultQueueOptions?.fifo.name || "";
@@ -282,8 +284,8 @@ export class SqnsEmitter implements IEmitter {
       }
     }
     if (
-      topic.exchangeType === ExchangeType.Queue &&
-      !topic.separateConsumerGroup
+      exchangeType === ExchangeType.Queue &&
+      !separateConsumerGroup
     ) {
       qName = topic.name;
     }
@@ -681,7 +683,7 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     if (!this.queues.has(queueName)) {
       if (
-        !topic.separateConsumerGroup &&
+        !this.getSeparateConsumer(topic) &&
         topic.exchangeType === ExchangeType.Fanout &&
         !this.options.defaultQueueOptions
       ) {
@@ -694,11 +696,11 @@ export class SqnsEmitter implements IEmitter {
         name:
           topic.exchangeType === ExchangeType.Queue
             ? topic.name
-            : topic.separateConsumerGroup ||
+            : this.getSeparateConsumer(topic) ||
               (topic.isFifo
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
-              "",
+              '',
         isFifo: this.checkIfConsumerIsFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
@@ -716,8 +718,17 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private checkIfConsumerIsFifo(topic: Pick<Topic, 'isConsumerFifo' | 'isFifo'>): boolean {
-    if (topic.isConsumerFifo !== undefined) return !!topic.isConsumerFifo;
+  private getSeparateConsumer(consumer: Pick<Topic, 'separateConsumerGroup' | 'consumerGroup'>): string | undefined {
+    const { separateConsumerGroup, consumerGroup } = consumer;
+    if (separateConsumerGroup && consumerGroup)
+      throw new Error(
+        `separateConsumerGroup and consumerGroup cannot be used together`
+      );
+    return separateConsumerGroup || consumerGroup?.name;
+  }
+
+  private checkIfConsumerIsFifo(topic: Pick<Topic, 'consumerGroup' | 'isFifo'>): boolean {
+    if (topic.consumerGroup !== undefined) return !!topic.consumerGroup.isFifo;
     return !!topic.isFifo;
   }
 
