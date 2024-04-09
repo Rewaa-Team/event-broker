@@ -37,7 +37,7 @@ export interface IMessageAttributes {
   BinaryListValues?: Uint8Array[];
 }
 
-export type ConsumerOptions = Omit<Topic, 'separateConsumerGroup' | 'exchangeType'>;
+export type ConsumerOptions = Omit<Topic, 'separateConsumerGroup' | 'exchangeType' | 'consumerGroup'>;
 
 export interface IEmitOptions {
   /**
