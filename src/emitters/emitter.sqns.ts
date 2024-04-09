@@ -271,8 +271,11 @@ export class SqnsEmitter implements IEmitter {
 
   private getQueueName = (topic: Topic, isDLQ: boolean = false): string => {
     let qName: string = "";
-    if (topic.separateConsumerGroup) {
-      qName = topic.separateConsumerGroup;
+    const queuePrefix = isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX;
+    const { exchangeType } = topic;
+    const separateConsumerGroup = this.getSeparateConsumer(topic);
+    if (separateConsumerGroup) {
+      qName = separateConsumerGroup;
     } else {
       if (topic.isFifo) {
         qName = this.options.defaultQueueOptions?.fifo.name || "";
@@ -281,15 +284,15 @@ export class SqnsEmitter implements IEmitter {
       }
     }
     if (
-      topic.exchangeType === ExchangeType.Queue &&
-      !topic.separateConsumerGroup
+      exchangeType === ExchangeType.Queue &&
+      !separateConsumerGroup
     ) {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
-    return `${this.options.environment}_${
-      isDLQ ? DLQ_PREFIX : SOURCE_QUEUE_PREFIX
-    }_${qName}${topic.isFifo ? ".fifo" : ""}`;
+    return `${this.options.environment}_${queuePrefix}_${qName}${
+      this.isConsumerFifo(topic) ? '.fifo' : ''
+    }`;
   };
 
   private getTopicName = (topic: Topic): string => {
@@ -682,7 +685,7 @@ export class SqnsEmitter implements IEmitter {
     this.topics.set(eventName, topic);
     if (!this.queues.has(queueName)) {
       if (
-        !topic.separateConsumerGroup &&
+        !this.getSeparateConsumer(topic) &&
         topic.exchangeType === ExchangeType.Fanout &&
         !this.options.defaultQueueOptions
       ) {
@@ -695,12 +698,12 @@ export class SqnsEmitter implements IEmitter {
         name:
           topic.exchangeType === ExchangeType.Queue
             ? topic.name
-            : topic.separateConsumerGroup ||
+            : this.getSeparateConsumer(topic) ||
               (topic.isFifo
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
-              "",
-        isFifo: !!topic.isFifo,
+              '',
+        isFifo: this.isConsumerFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
           topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -715,6 +718,20 @@ export class SqnsEmitter implements IEmitter {
     } else {
       this.queues.get(queueName)?.allTopics.push(topic);
     }
+  }
+
+  private getSeparateConsumer(topic: Topic): string | undefined {
+    const { separateConsumerGroup, consumerGroup } = topic;
+    if (separateConsumerGroup && consumerGroup)
+      throw new Error(
+        `separateConsumerGroup and consumerGroup cannot be used together`
+      );
+    return separateConsumerGroup || consumerGroup?.name;
+  }
+
+  private isConsumerFifo(topic: Topic): boolean {
+    if (topic.consumerGroup !== undefined) return !!topic.consumerGroup.isFifo;
+    return !!topic.isFifo;
   }
 
   private async onMessageReceived(
