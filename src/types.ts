@@ -3,6 +3,7 @@ import { Consumer } from "sqs-consumer";
 import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest, SendMessageBatchRequest } from "@aws-sdk/client-sqs";
 import { PublishBatchInput, PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
+import { OutboxConfig } from "./outbox/types";
 
 export interface Logger {
   error(error: any): void;
@@ -414,7 +415,7 @@ export interface IEmitter {
     eventName: string,
     options?: IEmitOptions,
     payload?: any
-  ): Promise<boolean>;
+  ): Promise<void>;
   /**
    * @param eventName Name of the topic/event to emit in batch
    * @param messages A list of max 10 messages to send as a batch
@@ -615,60 +616,4 @@ export interface ProcessMessageContext {
    * @description Similar to @see executionTraceId but provided by aws
    */
   receiptHandler?: string;
-}
-
-export interface OutboxConfig {
-  /**
-   * saving the events to the consumer service's outbox table
-   */
-  save: <T>(outboxData: OutboxData<T>) => Promise<void>;
-
-  /**
-   * gets events usings ids from outbox table on consumer service
-   * and emits the events
-   * @param ids ulids of the events to be emitted
-   */
-  processOutboxEvents: (data: OutboxEventPayload) => Promise<OutboxEvent[]>;
-
-  /**
-   * An optional name of the queue that processes the outbox events
-   */
-  consumerName?: string;  
-
-  /**
-   * The delay before the outbox events are sent to outbox queue
-   * 
-   * unit: s
-   * default: 5s
-   */
-  delay?: number;
-
-  /**
-   * Optional consume options for the outbox queue
-   */
-  consumeOptions?: ConsumeOptions;
-}
-
-export interface OutboxData<T> {
-  events: OutboxEvent[];
-  config: T;
-}
-
-export interface OutboxEvent {
-  /**
-   * ulid
-   */
-  id: string;
-  topicName: string;
-  payload: any;
-  options: Omit<IEmitOptions, 'outboxData'>;
-  isBatch: boolean;
-}
-
-export interface OutboxEventPayload {
-  /**
-   * ulid array
-   */
-  ids: string[];
-  isFifo: boolean;
 }

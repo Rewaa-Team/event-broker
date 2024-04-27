@@ -36,17 +36,23 @@ import {
   IMessage,
   EmitPayload,
   EmitBatchPayload,
-  OutboxEvent,
-  OutboxEventPayload,
 } from "../types";
-import { SubscribeResponse } from '@aws-sdk/client-sns';
-import { Message } from '@aws-sdk/client-sqs';
+import { PublishResponse, SubscribeResponse } from "@aws-sdk/client-sns";
+import { Message, SendMessageResult } from "@aws-sdk/client-sqs";
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
 import { ulid } from "ulid";
-import { info } from "console";
+import {
+  IOutbox,
+  OutboxConfig,
+  OutboxEvent,
+  OutboxEventFailureResponse,
+  OutboxEventPayload,
+  OutboxEventStatus,
+} from "src/outbox/types";
+import { Outbox } from "src/outbox/outbox.sqns";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -58,11 +64,9 @@ export class SqnsEmitter implements IEmitter {
   private topics: Map<string, Topic & { isDefaultQueue?: boolean }> = new Map();
   private queues: Map<string, Queue> = new Map();
   private consumersStarted: boolean = false;
+  private outbox?: IOutbox;
 
-  constructor(
-    private readonly logger: Logger,
-    options: IEmitterOptions
-  ) {
+  constructor(private readonly logger: Logger, options: IEmitterOptions) {
     this.options = options;
     this.logger = logger;
     if (!this.options.awsConfig) {
@@ -84,29 +88,32 @@ export class SqnsEmitter implements IEmitter {
       this.options.lambdaConfig || { ...this.options.awsConfig }
     );
     this.addDefaultTopics();
-    this.addOutboxTopic();
+    if (this.options.outboxConfig) {
+      this.configureOutbox(this.options.outboxConfig);
+    }
   }
 
   private getUniqueKeyForTopicListener(eventName: string, queueName: string) {
-    return `${eventName}-${queueName}`
+    return `${eventName}-${queueName}`;
   }
 
   private getTopicListeners(eventName: string, queueName: string) {
     return this.topicListeners.get(
       this.getUniqueKeyForTopicListener(eventName, queueName)
-    )
+    );
   }
 
-  private addTopicListener(eventName: string, queueName: string, listener: EventListener<any>) {
-    const listeners = this.getTopicListeners(
-      eventName,
-      queueName
-    ) ?? [];
+  private addTopicListener(
+    eventName: string,
+    queueName: string,
+    listener: EventListener<any>
+  ) {
+    const listeners = this.getTopicListeners(eventName, queueName) ?? [];
     listeners.push(listener);
     this.topicListeners.set(
       this.getUniqueKeyForTopicListener(eventName, queueName),
       listeners
-    )
+    );
   }
 
   async bootstrap(topics?: Topic[]) {
@@ -122,8 +129,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createEventSourceMappings() {
-    const promises: Promise<EventSourceMappingConfiguration | void>[] =
-      [];
+    const promises: Promise<EventSourceMappingConfiguration | void>[] = [];
     const uniqueQueueMap: Map<string, boolean> = new Map();
     this.topics.forEach((topic) => {
       const queueName = this.getQueueName(topic);
@@ -165,23 +171,24 @@ export class SqnsEmitter implements IEmitter {
     });
   }
 
-  private addOutboxTopic() {
-    if (this.options.outboxConfig) {
-      const name = this.options.outboxConfig.consumerName ?? DEFAULT_OUTBOX_TOPIC_NAME;
-      this.topics.set(name, {
-        name,
-        isFifo: true,
-        exchangeType: ExchangeType.Queue,
-      });
-      this.topics.set(name, {
-        name,
-        isFifo: false,
-        exchangeType: ExchangeType.Queue,
-      });
+  private configureOutbox(outboxConfig: OutboxConfig) {
+    this.outbox = new Outbox(outboxConfig);
+    const name = outboxConfig.consumerName ?? DEFAULT_OUTBOX_TOPIC_NAME;
+    this.topics.set(name, {
+      name,
+      isFifo: true,
+      exchangeType: ExchangeType.Queue,
+      ...outboxConfig.consumeOptions,
+    });
+    this.topics.set(name, {
+      name,
+      isFifo: false,
+      exchangeType: ExchangeType.Queue,
+      ...outboxConfig.consumeOptions,
+    });
 
-      // dummy event listener because the outbox event is processed by this.options.outboxConfig.processOutboxEvents()
-      this.on(name, async () => {}, this.options.outboxConfig.consumeOptions)
-    }
+    // dummy event listener because the outbox event is processed by this.options.outboxConfig.processOutboxEvents()
+    this.on(name, async () => {}, outboxConfig.consumeOptions);
   }
 
   private async createTopic(topic: Topic) {
@@ -308,15 +315,12 @@ export class SqnsEmitter implements IEmitter {
         qName = this.options.defaultQueueOptions?.standard.name || "";
       }
     }
-    if (
-      exchangeType === ExchangeType.Queue &&
-      !separateConsumerGroup
-    ) {
+    if (exchangeType === ExchangeType.Queue && !separateConsumerGroup) {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
     return `${this.options.environment}_${queuePrefix}_${qName}${
-      this.isConsumerFifo(topic) ? '.fifo' : ''
+      this.isConsumerFifo(topic) ? ".fifo" : ""
     }`;
   };
 
@@ -334,13 +338,13 @@ export class SqnsEmitter implements IEmitter {
     this.localEmitter.emit(this.options.eventOnFailure, data);
   };
 
-  async emitToTopic(
+  private async emitToTopic(
     topic: Topic,
     options?: IEmitOptions,
-    payload?: any,
-  ): Promise<boolean> {
+    payload?: any
+  ): Promise<PublishResponse> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
-    await this.snsProducer.send(topicArn, {
+    return await this.snsProducer.send(topicArn, {
       messageGroupId: options?.partitionKey || topic.name,
       eventName: topic.name,
       messageAttributes: options?.MessageAttributes,
@@ -350,16 +354,15 @@ export class SqnsEmitter implements IEmitter {
        */
       data: [payload],
     });
-    return true;
   }
 
-  async emitToQueue(
+  private async emitToQueue(
     topic: Topic,
     options?: IEmitOptions,
     payload?: any
-  ): Promise<boolean> {
+  ): Promise<SendMessageResult> {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
-    await this.sqsProducer.send(
+    return await this.sqsProducer.send(
       queueUrl,
       {
         messageGroupId: options?.partitionKey || topic.name,
@@ -375,7 +378,6 @@ export class SqnsEmitter implements IEmitter {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
       }
     );
-    return true;
   }
 
   getEmitPayload(
@@ -414,7 +416,15 @@ export class SqnsEmitter implements IEmitter {
     eventName: string,
     options?: IEmitOptions,
     payload?: any
-  ): Promise<boolean> {
+  ): Promise<void> {
+    await this.internalEmit(eventName, options, payload);
+  }
+
+  private async internalEmit(
+    eventName: string,
+    options?: IEmitOptions,
+    payload?: any
+  ): Promise<SendMessageResult | PublishResponse> {
     let modifiedArgs: any;
     try {
       if (options?.outboxData) {
@@ -426,8 +436,10 @@ export class SqnsEmitter implements IEmitter {
         exchangeType: options?.exchangeType || ExchangeType.Fanout,
         separateConsumerGroup: options?.consumerGroup,
       };
-      let response = false;
-      modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
+      modifiedArgs =
+        (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
+
+      let response: SendMessageResult | PublishResponse;
       if (topic.exchangeType === ExchangeType.Queue) {
         response = await this.emitToQueue(topic, options, modifiedArgs);
       } else {
@@ -452,7 +464,7 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  async emitBatchToTopic(
+  private async emitBatchToTopic(
     topic: Topic,
     messages: IBatchMessage[]
   ): Promise<IFailedEmitBatchMessage[]> {
@@ -471,14 +483,14 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  async emitBatchToQueue(
+  private async emitBatchToQueue(
     topic: Topic,
     messages: IBatchMessage[]
   ): Promise<IFailedEmitBatchMessage[]> {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
       queueUrl,
-      this.getBatchMessagesForQueue(topic.name, messages),
+      this.getBatchMessagesForQueue(topic.name, messages)
     );
     return (
       result.Failed?.map((failed) => ({
@@ -505,7 +517,7 @@ export class SqnsEmitter implements IEmitter {
       const queueUrl = this.getQueueUrl(this.getQueueName(topic));
       return this.sqsProducer.getBatchMessageRequest(
         queueUrl,
-        this.getBatchMessagesForQueue(topic.name, messages),
+        this.getBatchMessagesForQueue(topic.name, messages)
       );
     } else {
       const topicArn = this.getTopicArn(this.getTopicName(topic));
@@ -516,7 +528,10 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForQueue = (
+    topicName: string,
+    messages: IBatchMessage[]
+  ) =>
     messages.map((message) => {
       return {
         /**
@@ -532,7 +547,10 @@ export class SqnsEmitter implements IEmitter {
       };
     });
 
-  private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForTopic = (
+    topicName: string,
+    messages: IBatchMessage[]
+  ) =>
     messages.map((message) => {
       return {
         /**
@@ -671,7 +689,9 @@ export class SqnsEmitter implements IEmitter {
       receiptHandler: message.ReceiptHandle,
     };
     this.logger.info(
-      `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
+      `Message started ${queueUrl}_${
+        executionContext.executionTraceId
+      }_${new Date()}_${message?.Body?.toString()}`
     );
     await this.onMessageReceived(message, queueUrl, executionContext);
     if (deleteOptions) {
@@ -680,10 +700,18 @@ export class SqnsEmitter implements IEmitter {
         deleteOptions.receiptHandle
       );
     }
-    this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
+    this.logger.info(
+      `Message ended ${queueUrl}_${
+        executionContext.executionTraceId
+      }_${new Date()}`
+    );
   };
 
-  removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions) {
+  removeListener(
+    eventName: string,
+    listener: EventListener<any>,
+    consumeOptions?: ConsumeOptions
+  ) {
     const topic = this.getTopicFromEventNameAndConsumeOptions(
       eventName,
       consumeOptions
@@ -698,7 +726,10 @@ export class SqnsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  private getTopicFromEventNameAndConsumeOptions(eventName: string, options?: ConsumeOptions): Topic {
+  private getTopicFromEventNameAndConsumeOptions(
+    eventName: string,
+    options?: ConsumeOptions
+  ): Topic {
     return {
       ...options,
       name: eventName,
@@ -711,7 +742,10 @@ export class SqnsEmitter implements IEmitter {
     listener: EventListener<any>,
     options?: ConsumeOptions
   ) {
-    const topic = this.getTopicFromEventNameAndConsumeOptions(eventName, options)
+    const topic = this.getTopicFromEventNameAndConsumeOptions(
+      eventName,
+      options
+    );
     const queueName = this.getQueueName(topic);
     this.addTopicListener(eventName, queueName, listener);
     this.topics.set(eventName, topic);
@@ -734,7 +768,7 @@ export class SqnsEmitter implements IEmitter {
               (topic.isFifo
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
-              '',
+              "",
         isFifo: this.isConsumerFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
@@ -769,13 +803,15 @@ export class SqnsEmitter implements IEmitter {
   private async onMessageReceived(
     receivedMessage: Message,
     queueUrl: string,
-    executionContext: ProcessMessageContext,
+    executionContext: ProcessMessageContext
   ) {
     let message: ISQSMessage;
     try {
       message = this.parseDataFromMessage(receivedMessage);
     } catch (error) {
-      this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
+      this.logger.error(
+        `Failed to parse message. Trace Id: ${executionContext.executionTraceId}`
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.IncomingMessageFailedToParse,
         topicReference: queueUrl,
@@ -791,23 +827,26 @@ export class SqnsEmitter implements IEmitter {
       (message.messageAttributes?.PayloadVersion as any)?.stringValue;
 
     if (payloadStructureVersion !== PAYLOAD_STRUCTURE_VERSION_V2) {
-      message.data = message.data[0]
+      message.data = message.data[0];
     }
 
-    const outboxEventName = this.options.outboxConfig?.consumerName || DEFAULT_OUTBOX_TOPIC_NAME;
+    const outboxEventName =
+      this.options.outboxConfig?.consumerName || DEFAULT_OUTBOX_TOPIC_NAME;
     if (message.eventName === outboxEventName) {
-      await this.handleOutboxEvent(message.data)
+      await this.handleOutboxEvent(message.data);
       return;
     }
 
     const listeners = this.getTopicListeners(
       message.eventName,
-      this.getQueueNameFromUrl(
-        queueUrl
-      )
+      this.getQueueNameFromUrl(queueUrl)
     );
     if (!listeners) {
-      this.logger.error(`No listener found. Trace Id: ${executionContext.executionTraceId}. Message: ${JSON.stringify(message)}`);
+      this.logger.error(
+        `No listener found. Trace Id: ${
+          executionContext.executionTraceId
+        }. Message: ${JSON.stringify(message)}`
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.NoListenerFound,
         topic: message.eventName,
@@ -819,7 +858,10 @@ export class SqnsEmitter implements IEmitter {
     }
 
     try {
-      const data = await this.options.hooks?.beforeConsume?.(message.eventName, message.data);
+      const data = await this.options.hooks?.beforeConsume?.(
+        message.eventName,
+        message.data
+      );
       for (const listener of listeners) {
         await listener(data || message.data, {
           executionContext,
@@ -837,21 +879,47 @@ export class SqnsEmitter implements IEmitter {
         executionContext,
       });
       // Doing this because i don't want to mess with stack trace of rethrowing error
-      error['executionTraceId'] = executionContext.executionTraceId;
+      error["executionTraceId"] = executionContext.executionTraceId;
       throw error;
     }
   }
-  private async handleOutboxEvent(data: OutboxEventPayload) {
-    const outboxEvents = (await this.options.outboxConfig?.processOutboxEvents(data)) || [];
-    const outboxPromises: Array<Promise<IFailedEmitBatchMessage[]>|Promise<boolean>> = []
-    outboxEvents.forEach((event) => {
-      if (event.isBatch) {
-        outboxPromises.push(this.emitBatch(event.topicName, event.payload, event.options));
-      } else {
-        outboxPromises.push(this.emit(event.topicName, event.payload, event.options));
+  private async handleOutboxEvent(data: OutboxEventPayload): Promise<void> {
+    if (!this.outbox) {
+      throw new Error("Outbox config is not configured");
+    }
+    const outboxEvents = (await this.outbox.getOutboxEvents(data.ids)) || [];
+    if (data.isBatch) {
+      const outboxBatchPromises: Array<Promise<IFailedEmitBatchMessage[]>> =
+        outboxEvents.map((event) =>
+          this.emitBatch(event.topicName, event.payload, event.options)
+        );
+      const batchMessages = await Promise.allSettled(outboxBatchPromises);
+      for (let i = 0; i < batchMessages.length; i++) {
+        const message = batchMessages[i];
+        const value =
+          (message as PromiseFulfilledResult<IFailedEmitBatchMessage[]>)
+            .value || [];
+        const reason = (message as PromiseRejectedResult).reason;
+        outboxEvents[i] = this.outbox.handleBatchEvent(
+          outboxEvents[i],
+          value,
+          reason
+        );
       }
-    })
-    await Promise.allSettled(outboxPromises);
+    } else {
+      const outboxPromises: Array<
+        Promise<SendMessageResult | PublishResponse>
+      > = outboxEvents.map((event) =>
+        this.internalEmit(event.topicName, event.payload, event.options)
+      );
+      const messages = await Promise.allSettled(outboxPromises);
+      for (let i = 0; i < messages.length; i++) {
+        const message = messages[i];
+        const reason = (message as PromiseRejectedResult).reason;
+        outboxEvents[i] = this.outbox.handleEvent(outboxEvents[i], reason);
+      }
+    }
+    await this.outbox.updateEvents(outboxEvents);
   }
 
   public parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
@@ -867,7 +935,7 @@ export class SqnsEmitter implements IEmitter {
     message.messageAttributes =
       receivedMessage.MessageAttributes ||
       (receivedMessage as any).messageAttributes ||
-      message.messageAttributes; 
+      message.messageAttributes;
     return message as IMessage<T>;
   }
 
@@ -882,7 +950,7 @@ export class SqnsEmitter implements IEmitter {
         receiptsToDelete.push(messages[index].ReceiptHandle!);
       }
     });
-    if(receiptsToDelete.length) {
+    if (receiptsToDelete.length) {
       await this.sqsProducer.deleteMessages(queueUrl, receiptsToDelete);
     }
   }
@@ -902,9 +970,9 @@ export class SqnsEmitter implements IEmitter {
       };
     } catch (error: any) {
       this.logger.error(
-        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${error['executionTraceId'] ?? ''} :: ${JSON.stringify(
-          messages[i]
-        )}`
+        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${
+          error["executionTraceId"] ?? ""
+        } :: ${JSON.stringify(messages[i])}`
       );
       return {
         batchItemFailures: messages.slice(i, undefined).map((message) => {
@@ -922,9 +990,11 @@ export class SqnsEmitter implements IEmitter {
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     const results = await Promise.allSettled(
-      messages.map((message) => this.processMessage(message, {
-        queueReference: options?.queueReference,
-      }))
+      messages.map((message) =>
+        this.processMessage(message, {
+          queueReference: options?.queueReference,
+        })
+      )
     );
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
@@ -974,7 +1044,8 @@ export class SqnsEmitter implements IEmitter {
     if (!message.MessageAttributes) {
       message.MessageAttributes = (message as any).messageAttributes;
     }
-    const queueUrl = options?.queueReference || this.getQueueUrlFromMessage(message);
+    const queueUrl =
+      options?.queueReference || this.getQueueUrlFromMessage(message);
     let deleteOptions: MessageDeleteOptions | undefined;
     if (options?.shouldDeleteMessage) {
       deleteOptions = {
@@ -982,11 +1053,7 @@ export class SqnsEmitter implements IEmitter {
         receiptHandle: message.ReceiptHandle!,
       };
     }
-    return await this.handleMessageReceipt(
-      message,
-      queueUrl,
-      deleteOptions
-    );
+    return await this.handleMessageReceipt(message, queueUrl, deleteOptions);
   }
 
   getTopicReference(topic: Topic): string {
@@ -1043,38 +1110,37 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueNameFromUrl(queueUrl: string) {
-    const urlParts = queueUrl.split('/')
-    return urlParts[urlParts.length - 1]
+    const urlParts = queueUrl.split("/");
+    return urlParts[urlParts.length - 1];
   }
 
   private async saveEventToOutbox(
     eventName: string,
     options: IEmitOptions | IBatchEmitOptions,
     payload?: any,
-    isBatch = false,
-  ): Promise<boolean> {
-    const { outboxData: _outboxData, ...emitOptions } = options;
-    const ids = [ulid()];
-
-    const outboxEvent: OutboxEvent = {
-      topicName: eventName,
-      id: ids[0],
-      payload,
-      options: emitOptions,
-      isBatch,
+    isBatch = false
+  ): Promise<SendMessageResult | PublishResponse> {
+    if (!this.outbox) {
+      throw new Error("Outbox is not configured");
     }
-    await this.options.outboxConfig!.save({
-      events: [outboxEvent],
-      config: options.outboxData!,
-    })
+    const outboxEvent = await this.outbox.createEvent(
+      eventName,
+      options,
+      payload,
+      isBatch
+    );
     const outboxTopicName = this.getOutboxTopicName(options.isFifo);
     const emitOptionsForOutbox = this.getOutboxEmitOptions(options);
     const outboxEventPayload: OutboxEventPayload = {
-      ids,
+      ids: [outboxEvent.id],
       isFifo: options.isFifo,
-    }
-    await this.emit(outboxTopicName, emitOptionsForOutbox, outboxEventPayload);
-    return true;
+      isBatch,
+    };
+    return await this.internalEmit(
+      outboxTopicName,
+      emitOptionsForOutbox,
+      outboxEventPayload
+    );
   }
 
   private getOutboxTopicName(isFifo: boolean): string {
@@ -1090,6 +1156,6 @@ export class SqnsEmitter implements IEmitter {
       ...options,
       exchangeType: ExchangeType.Queue,
       delay: this.options.outboxConfig?.delay || DEFAULT_OUTBOX_TOPIC_DELAY,
-    }
+    };
   }
 }
