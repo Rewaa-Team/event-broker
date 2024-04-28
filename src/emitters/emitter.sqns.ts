@@ -170,14 +170,16 @@ export class SqnsEmitter implements IEmitter {
       name,
       isFifo: true,
       exchangeType: ExchangeType.Queue,
-      ...outboxConfig.consumeOptions,
+      delay: outboxConfig.consumeOptions?.fifo?.delay || DEFAULT_OUTBOX_TOPIC_DELAY,
+      ...outboxConfig.consumeOptions?.fifo,
     };
     this.topics.set(name, fifoOptions);
     const nonFifoOptions = {
       name,
       isFifo: false,
+      delay: outboxConfig.consumeOptions?.nonFifo?.delay || DEFAULT_OUTBOX_TOPIC_DELAY,
       exchangeType: ExchangeType.Queue,
-      ...outboxConfig.consumeOptions,
+      ...outboxConfig.consumeOptions?.nonFifo,
     };
     this.topics.set(name, nonFifoOptions);
     this.on(name, async () => {}, fifoOptions);
@@ -766,6 +768,7 @@ export class SqnsEmitter implements IEmitter {
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
           topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
+        delay: topic.delay,
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
@@ -1146,7 +1149,7 @@ export class SqnsEmitter implements IEmitter {
     const { outboxData, ...emitOptions } = options;
     const delay = options.isFifo
       ? undefined
-      : this.options.outboxConfig?.delay || DEFAULT_OUTBOX_TOPIC_DELAY;
+      : this.options.outboxConfig?.consumeOptions?.nonFifo?.delay;
     return {
       ...emitOptions,
       exchangeType: ExchangeType.Queue,

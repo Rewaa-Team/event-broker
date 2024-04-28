@@ -139,7 +139,7 @@ export class SQSProducer {
       VisibilityTimeout: `${
         topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT
       }`,
-      DelaySeconds: `${DEFAULT_MESSAGE_DELAY}`,
+      DelaySeconds: `${topic.delay || DEFAULT_MESSAGE_DELAY}`,
       MessageRetentionPeriod: `${
         topic?.retentionPeriod ||
         (isDLQ

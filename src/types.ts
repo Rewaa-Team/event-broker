@@ -82,6 +82,7 @@ export interface IEmitOptions {
   consumerGroup?: string;
   /**
    * Delay receiving the message on consumer
+   * This overrides the delay set on the topic in case of non fifo
    *
    * Unit: s
    */
@@ -163,6 +164,7 @@ export interface Queue {
   arn?: string;
   isDLQ?: boolean;
   visibilityTimeout?: number;
+  delay?: number;
   batchSize?: number;
   listenerIsLambda?: boolean;
   topic: Topic;
@@ -275,6 +277,12 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
+   /**
+   * Delay receiving the message on consumer
+   *
+   * Unit: s
+   */
+   delay?: number;
 }
 
 export interface Hooks {

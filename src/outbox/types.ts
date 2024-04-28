@@ -23,17 +23,12 @@ export interface OutboxConfig {
   consumerName?: string;
 
   /**
-   * The delay before the outbox events are sent to outbox queue
-   *
-   * unit: s
-   * default: 5s
-   */
-  delay?: number;
-
-  /**
    * Optional consume options for the outbox queue
    */
-  consumeOptions?: ConsumeOptions;
+  consumeOptions?: {
+    fifo?: ConsumeOptions;
+    nonFifo?: ConsumeOptions;
+  };
 }
 
 export interface OutboxData<T extends any> {
