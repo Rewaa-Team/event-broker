@@ -2,13 +2,12 @@ import {
   IEmitOptions,
   IBatchEmitOptions,
   IFailedEmitBatchMessage,
-} from "src/types";
+} from "../types";
 import {
   IOutbox,
   OutboxConfig,
   OutboxEvent,
   OutboxEventFailureResponse,
-  OutboxEventPayload,
   OutboxEventStatus,
 } from "./types";
 import { ulid } from "ulid";
@@ -18,7 +17,7 @@ export class Outbox implements IOutbox {
   async updateEvents(events: OutboxEvent[]): Promise<void> {
     return await this.config.save({
       events,
-      config: {}
+      config: {},
     });
   }
   handleEvent(event: OutboxEvent, errorReason?: unknown): OutboxEvent {

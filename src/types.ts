@@ -1,7 +1,17 @@
 import EventEmitter from "events";
 import { Consumer } from "sqs-consumer";
-import { MessageAttributeValue, SQSClientConfig, Message, SendMessageRequest, SendMessageBatchRequest } from "@aws-sdk/client-sqs";
-import { PublishBatchInput, PublishInput, SNSClientConfig } from "@aws-sdk/client-sns";
+import {
+  MessageAttributeValue,
+  SQSClientConfig,
+  Message,
+  SendMessageRequest,
+  SendMessageBatchRequest,
+} from "@aws-sdk/client-sqs";
+import {
+  PublishBatchInput,
+  PublishInput,
+  SNSClientConfig,
+} from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 import { OutboxConfig } from "./outbox/types";
 
@@ -38,7 +48,10 @@ export interface IMessageAttributes {
   BinaryListValues?: Uint8Array[];
 }
 
-export type ConsumerOptions = Omit<Topic, 'separateConsumerGroup' | 'exchangeType' | 'consumerGroup'>;
+export type ConsumerOptions = Omit<
+  Topic,
+  "separateConsumerGroup" | "exchangeType" | "consumerGroup"
+>;
 
 export interface IEmitOptions {
   /**
@@ -78,7 +91,7 @@ export interface IEmitOptions {
    * Message attributes to be sent along with the message
    */
   MessageAttributes?: { [key: string]: MessageAttributeValue };
-   /**
+  /**
    * Set to a unique id if you want to avoid duplications in
    * a FIFO queue. The same deduplicationId sent within a 5
    * minite interval will be discarded.
@@ -91,15 +104,21 @@ export interface IEmitOptions {
   outboxData?: Record<string, any>;
 }
 
-export type IBatchEmitOptions = Pick<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup' | 'outboxData'>;
+export type IBatchEmitOptions = Pick<
+  IEmitOptions,
+  "isFifo" | "exchangeType" | "consumerGroup" | "outboxData"
+>;
 
-export type IBatchMessage = Omit<IEmitOptions, 'isFifo' | 'exchangeType' | 'consumerGroup'> & {
+export type IBatchMessage = Omit<
+  IEmitOptions,
+  "isFifo" | "exchangeType" | "consumerGroup"
+> & {
   data: any;
   /**
    * A batch-level unique id. Used for reporting the result
    * of the batch api
    */
-  id: string
+  id: string;
 };
 
 export interface IFailedEmitBatchMessage {
@@ -200,7 +219,7 @@ export interface Topic {
   /**
    * An optional consumer group specification
    * Use this when consumer configuration is different from the topic
-   * 
+   *
    * When specified, the broker will consume the messages from this
    * otherwise the broker will subscribe the default queue to this topic
    */
@@ -260,7 +279,7 @@ export interface Topic {
 
 export interface Hooks {
   /**
-   * 
+   *
    * @param topicName name of the topic on which beforeEmit was
    * executed
    * @param data the data with which emit was called
@@ -268,14 +287,14 @@ export interface Hooks {
    */
   beforeEmit?<T>(topicName: string, data: T): Promise<T>;
   /**
-   * 
+   *
    * @param topicName name of the topic on which afterEmit was
    * executed
    * @param data the data with which emit was called
    */
   afterEmit?<T>(topicName: string, data: T): Promise<void>;
   /**
-   * 
+   *
    * @param topicName name of the topic on which beforeConsume was
    * executed
    * @param data the data with which the consumer function will be called
@@ -284,7 +303,7 @@ export interface Hooks {
    */
   beforeConsume?<T>(topicName: string, data: T): Promise<T>;
   /**
-   * 
+   *
    * @param topicName name of the topic on which afterConsume will be
    * executed
    * @param data the data with which the consumer function was called
@@ -402,7 +421,10 @@ export interface MessageMetaData {
   messageAttributes?: { [key: string]: MessageAttributeValue };
 }
 
-export type EventListener<T> = (args: T, metadata?: MessageMetaData) => Promise<void>;
+export type EventListener<T> = (
+  args: T,
+  metadata?: MessageMetaData
+) => Promise<void>;
 
 export interface IEmitter {
   /**
@@ -411,11 +433,7 @@ export interface IEmitter {
    * Only required if Emitter.on is not used
    */
   bootstrap(topics?: Topic[]): Promise<void>;
-  emit(
-    eventName: string,
-    options?: IEmitOptions,
-    payload?: any
-  ): Promise<void>;
+  emit(eventName: string, options?: IEmitOptions, payload?: any): Promise<void>;
   /**
    * @param eventName Name of the topic/event to emit in batch
    * @param messages A list of max 10 messages to send as a batch
@@ -424,7 +442,7 @@ export interface IEmitter {
   emitBatch(
     eventName: string,
     messages: IBatchMessage[],
-    options?: IBatchEmitOptions,
+    options?: IBatchEmitOptions
   ): Promise<IFailedEmitBatchMessage[]>;
   on<T>(
     eventName: string,
@@ -432,7 +450,11 @@ export interface IEmitter {
     options?: ConsumeOptions
   ): void;
   removeAllListener(): void;
-  removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions): void;
+  removeListener(
+    eventName: string,
+    listener: EventListener<any>,
+    consumeOptions?: ConsumeOptions
+  ): void;
   /**
    * Use this method to when you need to consume messages by yourself
    * but use the routing logic defined in the broker.
@@ -456,7 +478,7 @@ export interface IEmitter {
   processMessages(
     messages: Message[],
     options?: ProcessMessageOptions
-  ): Promise<IFailedConsumerMessages>
+  ): Promise<IFailedConsumerMessages>;
   /**
    * @param topic A Topic object
    *
@@ -523,14 +545,14 @@ export interface IEmitter {
     options?: IBatchEmitOptions
   ): EmitBatchPayload;
   /**
-   * 
+   *
    * @param receivedMessage The message received from the consumer
    * @returns The expected parsed data in the message as provided by the producer
    */
   parseDataFromMessage<T>(receivedMessage: Message): IMessage<T>;
 }
 
-export type ISNSMessage =  IMessage<any>;
+export type ISNSMessage = IMessage<any>;
 
 export interface ISNSReceiveMessage {
   Message: string;
@@ -566,14 +588,14 @@ export enum ExchangeType {
 }
 
 export enum FailedEventCategory {
-  MessageProducingFailed = 'MessageProducingFailed',
-  QueueError = 'QueueError',
-  QueueProcessingError = 'QueueProcessingError',
-  QueueStopped = 'QueueStopped',
-  QueueTimedOut = 'QueueTimedOut',
-  IncomingMessageFailedToParse = 'IncomingMessageFailedToParse',
-  NoListenerFound = 'NoListenerFound',
-  MessageProcessingFailed = 'MessageProcessingFailed',
+  MessageProducingFailed = "MessageProducingFailed",
+  QueueError = "QueueError",
+  QueueProcessingError = "QueueProcessingError",
+  QueueStopped = "QueueStopped",
+  QueueTimedOut = "QueueTimedOut",
+  IncomingMessageFailedToParse = "IncomingMessageFailedToParse",
+  NoListenerFound = "NoListenerFound",
+  MessageProcessingFailed = "MessageProcessingFailed",
 }
 
 export interface MessageDeleteOptions {
@@ -595,7 +617,7 @@ export interface ProcessMessageOptions {
   /**
    * The queue ARN from which the message is received.
    * In case of Lambda, the received messages have the eventSourceARN,
-   * so this property is optional. In all other cases, this must be 
+   * so this property is optional. In all other cases, this must be
    * provided
    */
   queueReference?: string;

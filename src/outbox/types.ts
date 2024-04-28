@@ -3,13 +3,13 @@ import {
   IBatchEmitOptions,
   IEmitOptions,
   IFailedEmitBatchMessage,
-} from "src/types";
+} from "../types";
 
 export interface OutboxConfig {
   /**
    * saving (insert or update) the events to the consumer service's outbox table
    */
-  save: <T extends any>(outboxData: OutboxData<T>) => Promise<void>;
+  save: (outboxData: OutboxData<any>) => Promise<void>;
 
   /**
    * gets events usings ids from outbox table on consumer service
@@ -55,11 +55,11 @@ export interface OutboxEvent {
    */
   id: string;
   topicName: string;
-  payload: any;
+  payload?: any;
   options: Omit<IEmitOptions, "outboxData">;
   isBatch: boolean;
-  error: unknown;
-  failureResponse: OutboxEventFailureResponse[];
+  error?: unknown;
+  failureResponse?: OutboxEventFailureResponse[];
   status: OutboxEventStatus;
 }
 

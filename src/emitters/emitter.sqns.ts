@@ -43,16 +43,8 @@ import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
-import { ulid } from "ulid";
-import {
-  IOutbox,
-  OutboxConfig,
-  OutboxEvent,
-  OutboxEventFailureResponse,
-  OutboxEventPayload,
-  OutboxEventStatus,
-} from "src/outbox/types";
-import { Outbox } from "src/outbox/outbox.sqns";
+import { IOutbox, OutboxConfig, OutboxEventPayload } from "../outbox/types";
+import { Outbox } from "../outbox/outbox.sqns";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -174,21 +166,22 @@ export class SqnsEmitter implements IEmitter {
   private configureOutbox(outboxConfig: OutboxConfig) {
     this.outbox = new Outbox(outboxConfig);
     const name = outboxConfig.consumerName ?? DEFAULT_OUTBOX_TOPIC_NAME;
-    this.topics.set(name, {
+    const fifoOptions = {
       name,
       isFifo: true,
       exchangeType: ExchangeType.Queue,
       ...outboxConfig.consumeOptions,
-    });
-    this.topics.set(name, {
+    };
+    this.topics.set(name, fifoOptions);
+    const nonFifoOptions = {
       name,
       isFifo: false,
       exchangeType: ExchangeType.Queue,
       ...outboxConfig.consumeOptions,
-    });
-
-    // dummy event listener because the outbox event is processed by this.options.outboxConfig.processOutboxEvents()
-    this.on(name, async () => {}, outboxConfig.consumeOptions);
+    };
+    this.topics.set(name, nonFifoOptions);
+    this.on(name, async () => {}, fifoOptions);
+    this.on(name, async () => {}, nonFifoOptions);
   }
 
   private async createTopic(topic: Topic) {
@@ -830,8 +823,7 @@ export class SqnsEmitter implements IEmitter {
       message.data = message.data[0];
     }
 
-    const outboxEventName =
-      this.options.outboxConfig?.consumerName || DEFAULT_OUTBOX_TOPIC_NAME;
+    const outboxEventName = this.getOutboxTopicName();
     if (message.eventName === outboxEventName) {
       await this.handleOutboxEvent(message.data);
       return;
@@ -910,7 +902,7 @@ export class SqnsEmitter implements IEmitter {
       const outboxPromises: Array<
         Promise<SendMessageResult | PublishResponse>
       > = outboxEvents.map((event) =>
-        this.internalEmit(event.topicName, event.payload, event.options)
+        this.internalEmit(event.topicName, event.options, event.payload)
       );
       const messages = await Promise.allSettled(outboxPromises);
       for (let i = 0; i < messages.length; i++) {
@@ -1129,7 +1121,7 @@ export class SqnsEmitter implements IEmitter {
       payload,
       isBatch
     );
-    const outboxTopicName = this.getOutboxTopicName(options.isFifo);
+    const outboxTopicName = this.getOutboxTopicName();
     const emitOptionsForOutbox = this.getOutboxEmitOptions(options);
     const outboxEventPayload: OutboxEventPayload = {
       ids: [outboxEvent.id],
@@ -1143,19 +1135,22 @@ export class SqnsEmitter implements IEmitter {
     );
   }
 
-  private getOutboxTopicName(isFifo: boolean): string {
-    const fifoSuffix = isFifo ? ".fifo" : "";
+  private getOutboxTopicName(): string {
     if (this.options.outboxConfig!.consumerName) {
-      return `${this.options.outboxConfig!.consumerName}${fifoSuffix}`;
+      return `${this.options.outboxConfig!.consumerName}`;
     }
-    return `${this.options.environment}_${this.options.serviceName}_${DEFAULT_OUTBOX_TOPIC_NAME}${fifoSuffix}`;
+    return `${this.options.environment}_${this.options.serviceName}_${DEFAULT_OUTBOX_TOPIC_NAME}`;
   }
 
   private getOutboxEmitOptions(options: IEmitOptions): IEmitOptions {
+    const { outboxData, ...emitOptions } = options;
+    const delay = options.isFifo
+      ? undefined
+      : this.options.outboxConfig?.delay || DEFAULT_OUTBOX_TOPIC_DELAY;
     return {
-      ...options,
+      ...emitOptions,
       exchangeType: ExchangeType.Queue,
-      delay: this.options.outboxConfig?.delay || DEFAULT_OUTBOX_TOPIC_DELAY,
+      delay,
     };
   }
 }
