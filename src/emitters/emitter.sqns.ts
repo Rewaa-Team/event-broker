@@ -36,8 +36,8 @@ import {
   EmitPayload,
   EmitBatchPayload,
 } from "../types";
-import { SubscribeResponse } from '@aws-sdk/client-sns';
-import { Message } from '@aws-sdk/client-sqs';
+import { SubscribeResponse } from "@aws-sdk/client-sns";
+import { Message } from "@aws-sdk/client-sqs";
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
 import { SQSProducer } from "../producers/producer.sqs";
@@ -54,10 +54,7 @@ export class SqnsEmitter implements IEmitter {
   private queues: Map<string, Queue> = new Map();
   private consumersStarted: boolean = false;
 
-  constructor(
-    private readonly logger: Logger,
-    options: IEmitterOptions
-  ) {
+  constructor(private readonly logger: Logger, options: IEmitterOptions) {
     this.options = options;
     this.logger = logger;
     if (!this.options.awsConfig) {
@@ -82,25 +79,26 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getUniqueKeyForTopicListener(eventName: string, queueName: string) {
-    return `${eventName}-${queueName}`
+    return `${eventName}-${queueName}`;
   }
 
   private getTopicListeners(eventName: string, queueName: string) {
     return this.topicListeners.get(
       this.getUniqueKeyForTopicListener(eventName, queueName)
-    )
+    );
   }
 
-  private addTopicListener(eventName: string, queueName: string, listener: EventListener<any>) {
-    const listeners = this.getTopicListeners(
-      eventName,
-      queueName
-    ) ?? [];
+  private addTopicListener(
+    eventName: string,
+    queueName: string,
+    listener: EventListener<any>
+  ) {
+    const listeners = this.getTopicListeners(eventName, queueName) ?? [];
     listeners.push(listener);
     this.topicListeners.set(
       this.getUniqueKeyForTopicListener(eventName, queueName),
       listeners
-    )
+    );
   }
 
   async bootstrap(topics?: Topic[]) {
@@ -116,8 +114,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private async createEventSourceMappings() {
-    const promises: Promise<EventSourceMappingConfiguration | void>[] =
-      [];
+    const promises: Promise<EventSourceMappingConfiguration | void>[] = [];
     const uniqueQueueMap: Map<string, boolean> = new Map();
     this.topics.forEach((topic) => {
       const queueName = this.getQueueName(topic);
@@ -283,15 +280,12 @@ export class SqnsEmitter implements IEmitter {
         qName = this.options.defaultQueueOptions?.standard.name || "";
       }
     }
-    if (
-      exchangeType === ExchangeType.Queue &&
-      !separateConsumerGroup
-    ) {
+    if (exchangeType === ExchangeType.Queue && !separateConsumerGroup) {
       qName = topic.name;
     }
     qName = qName.replace(".fifo", "");
     return `${this.options.environment}_${queuePrefix}_${qName}${
-      this.isConsumerFifo(topic) ? '.fifo' : ''
+      this.isConsumerFifo(topic) ? ".fifo" : ""
     }`;
   };
 
@@ -312,7 +306,7 @@ export class SqnsEmitter implements IEmitter {
   async emitToTopic(
     topic: Topic,
     options?: IEmitOptions,
-    payload?: any,
+    payload?: any
   ): Promise<boolean> {
     const topicArn = this.getTopicArn(this.getTopicName(topic));
     await this.snsProducer.send(topicArn, {
@@ -399,7 +393,8 @@ export class SqnsEmitter implements IEmitter {
         separateConsumerGroup: options?.consumerGroup,
       };
       let response = false;
-      modifiedArgs = (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
+      modifiedArgs =
+        (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
       if (topic.exchangeType === ExchangeType.Queue) {
         response = await this.emitToQueue(topic, options, modifiedArgs);
       } else {
@@ -450,7 +445,7 @@ export class SqnsEmitter implements IEmitter {
     const queueUrl = this.getQueueUrl(this.getQueueName(topic));
     const result = await this.sqsProducer.sendBatch(
       queueUrl,
-      this.getBatchMessagesForQueue(topic.name, messages),
+      this.getBatchMessagesForQueue(topic.name, messages)
     );
     return (
       result.Failed?.map((failed) => ({
@@ -477,7 +472,7 @@ export class SqnsEmitter implements IEmitter {
       const queueUrl = this.getQueueUrl(this.getQueueName(topic));
       return this.sqsProducer.getBatchMessageRequest(
         queueUrl,
-        this.getBatchMessagesForQueue(topic.name, messages),
+        this.getBatchMessagesForQueue(topic.name, messages)
       );
     } else {
       const topicArn = this.getTopicArn(this.getTopicName(topic));
@@ -488,7 +483,10 @@ export class SqnsEmitter implements IEmitter {
     }
   }
 
-  private getBatchMessagesForQueue = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForQueue = (
+    topicName: string,
+    messages: IBatchMessage[]
+  ) =>
     messages.map((message) => {
       return {
         /**
@@ -504,7 +502,10 @@ export class SqnsEmitter implements IEmitter {
       };
     });
 
-  private getBatchMessagesForTopic = (topicName: string, messages: IBatchMessage[]) =>
+  private getBatchMessagesForTopic = (
+    topicName: string,
+    messages: IBatchMessage[]
+  ) =>
     messages.map((message) => {
       return {
         /**
@@ -557,7 +558,7 @@ export class SqnsEmitter implements IEmitter {
     this.logger.info(`Consumers started`);
   }
 
-  private startConsumer(queue: Queue) {
+  private startConsumerWorker(queue: Queue) {
     if (!queue.url) {
       return;
     }
@@ -628,6 +629,15 @@ export class SqnsEmitter implements IEmitter {
     queue.consumer.start();
   }
 
+  private startConsumer(queue: Queue) {
+    if (queue.workers !== undefined && queue.workers > 0) {
+      for (let i = 0; i < queue.workers; i++) {
+        this.startConsumerWorker(queue);
+      }
+    }
+    this.startConsumerWorker(queue);
+  }
+
   private handleMessageReceipt = async (
     message: Message,
     queueUrl: string,
@@ -639,7 +649,9 @@ export class SqnsEmitter implements IEmitter {
       receiptHandler: message.ReceiptHandle,
     };
     this.logger.info(
-      `Message started ${queueUrl}_${executionContext.executionTraceId}_${new Date()}_${message?.Body?.toString()}`
+      `Message started ${queueUrl}_${
+        executionContext.executionTraceId
+      }_${new Date()}_${message?.Body?.toString()}`
     );
     await this.onMessageReceived(message, queueUrl, executionContext);
     if (deleteOptions) {
@@ -648,10 +660,18 @@ export class SqnsEmitter implements IEmitter {
         deleteOptions.receiptHandle
       );
     }
-    this.logger.info(`Message ended ${queueUrl}_${executionContext.executionTraceId}_${new Date()}`);
+    this.logger.info(
+      `Message ended ${queueUrl}_${
+        executionContext.executionTraceId
+      }_${new Date()}`
+    );
   };
 
-  removeListener(eventName: string, listener: EventListener<any>, consumeOptions?: ConsumeOptions) {
+  removeListener(
+    eventName: string,
+    listener: EventListener<any>,
+    consumeOptions?: ConsumeOptions
+  ) {
     const topic = this.getTopicFromEventNameAndConsumeOptions(
       eventName,
       consumeOptions
@@ -666,7 +686,10 @@ export class SqnsEmitter implements IEmitter {
     this.topicListeners.clear();
   }
 
-  private getTopicFromEventNameAndConsumeOptions(eventName: string, options?: ConsumeOptions): Topic {
+  private getTopicFromEventNameAndConsumeOptions(
+    eventName: string,
+    options?: ConsumeOptions
+  ): Topic {
     return {
       ...options,
       name: eventName,
@@ -679,7 +702,10 @@ export class SqnsEmitter implements IEmitter {
     listener: EventListener<any>,
     options?: ConsumeOptions
   ) {
-    const topic = this.getTopicFromEventNameAndConsumeOptions(eventName, options)
+    const topic = this.getTopicFromEventNameAndConsumeOptions(
+      eventName,
+      options
+    );
     const queueName = this.getQueueName(topic);
     this.addTopicListener(eventName, queueName, listener);
     this.topics.set(eventName, topic);
@@ -702,7 +728,7 @@ export class SqnsEmitter implements IEmitter {
               (topic.isFifo
                 ? this.options.defaultQueueOptions?.fifo.name
                 : this.options.defaultQueueOptions?.standard.name) ||
-              '',
+              "",
         isFifo: this.isConsumerFifo(topic),
         batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
         visibilityTimeout:
@@ -737,13 +763,15 @@ export class SqnsEmitter implements IEmitter {
   private async onMessageReceived(
     receivedMessage: Message,
     queueUrl: string,
-    executionContext: ProcessMessageContext,
+    executionContext: ProcessMessageContext
   ) {
     let message: ISQSMessage;
     try {
       message = this.parseDataFromMessage(receivedMessage);
     } catch (error) {
-      this.logger.error(`Failed to parse message. Trace Id: ${executionContext.executionTraceId}`);
+      this.logger.error(
+        `Failed to parse message. Trace Id: ${executionContext.executionTraceId}`
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.IncomingMessageFailedToParse,
         topicReference: queueUrl,
@@ -759,17 +787,19 @@ export class SqnsEmitter implements IEmitter {
       (message.messageAttributes?.PayloadVersion as any)?.stringValue;
 
     if (payloadStructureVersion !== PAYLOAD_STRUCTURE_VERSION_V2) {
-      message.data = message.data[0]
+      message.data = message.data[0];
     }
 
     const listeners = this.getTopicListeners(
       message.eventName,
-      this.getQueueNameFromUrl(
-        queueUrl
-      )
+      this.getQueueNameFromUrl(queueUrl)
     );
     if (!listeners) {
-      this.logger.error(`No listener found. Trace Id: ${executionContext.executionTraceId}. Message: ${JSON.stringify(message)}`);
+      this.logger.error(
+        `No listener found. Trace Id: ${
+          executionContext.executionTraceId
+        }. Message: ${JSON.stringify(message)}`
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.NoListenerFound,
         topic: message.eventName,
@@ -781,7 +811,10 @@ export class SqnsEmitter implements IEmitter {
     }
 
     try {
-      const data = await this.options.hooks?.beforeConsume?.(message.eventName, message.data);
+      const data = await this.options.hooks?.beforeConsume?.(
+        message.eventName,
+        message.data
+      );
       for (const listener of listeners) {
         await listener(data || message.data, {
           executionContext,
@@ -799,7 +832,7 @@ export class SqnsEmitter implements IEmitter {
         executionContext,
       });
       // Doing this because i don't want to mess with stack trace of rethrowing error
-      error['executionTraceId'] = executionContext.executionTraceId;
+      error["executionTraceId"] = executionContext.executionTraceId;
       throw error;
     }
   }
@@ -817,7 +850,7 @@ export class SqnsEmitter implements IEmitter {
     message.messageAttributes =
       receivedMessage.MessageAttributes ||
       (receivedMessage as any).messageAttributes ||
-      message.messageAttributes; 
+      message.messageAttributes;
     return message as IMessage<T>;
   }
 
@@ -832,7 +865,7 @@ export class SqnsEmitter implements IEmitter {
         receiptsToDelete.push(messages[index].ReceiptHandle!);
       }
     });
-    if(receiptsToDelete.length) {
+    if (receiptsToDelete.length) {
       await this.sqsProducer.deleteMessages(queueUrl, receiptsToDelete);
     }
   }
@@ -852,9 +885,9 @@ export class SqnsEmitter implements IEmitter {
       };
     } catch (error: any) {
       this.logger.error(
-        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${error['executionTraceId'] ?? ''} :: ${JSON.stringify(
-          messages[i]
-        )}`
+        `Fifo queue message failed :: ${queueUrl} Execution Trace ID ${
+          error["executionTraceId"] ?? ""
+        } :: ${JSON.stringify(messages[i])}`
       );
       return {
         batchItemFailures: messages.slice(i, undefined).map((message) => {
@@ -872,9 +905,11 @@ export class SqnsEmitter implements IEmitter {
     options?: ProcessMessageOptions
   ): Promise<IFailedConsumerMessages> {
     const results = await Promise.allSettled(
-      messages.map((message) => this.processMessage(message, {
-        queueReference: options?.queueReference,
-      }))
+      messages.map((message) =>
+        this.processMessage(message, {
+          queueReference: options?.queueReference,
+        })
+      )
     );
     if (options?.shouldDeleteMessage) {
       await this.deleteMessages(queueUrl, messages, results);
@@ -924,7 +959,8 @@ export class SqnsEmitter implements IEmitter {
     if (!message.MessageAttributes) {
       message.MessageAttributes = (message as any).messageAttributes;
     }
-    const queueUrl = options?.queueReference || this.getQueueUrlFromMessage(message);
+    const queueUrl =
+      options?.queueReference || this.getQueueUrlFromMessage(message);
     let deleteOptions: MessageDeleteOptions | undefined;
     if (options?.shouldDeleteMessage) {
       deleteOptions = {
@@ -932,11 +968,7 @@ export class SqnsEmitter implements IEmitter {
         receiptHandle: message.ReceiptHandle!,
       };
     }
-    return await this.handleMessageReceipt(
-      message,
-      queueUrl,
-      deleteOptions
-    );
+    return await this.handleMessageReceipt(message, queueUrl, deleteOptions);
   }
 
   getTopicReference(topic: Topic): string {
@@ -993,7 +1025,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getQueueNameFromUrl(queueUrl: string) {
-    const urlParts = queueUrl.split('/')
-    return urlParts[urlParts.length - 1]
+    const urlParts = queueUrl.split("/");
+    return urlParts[urlParts.length - 1];
   }
 }
