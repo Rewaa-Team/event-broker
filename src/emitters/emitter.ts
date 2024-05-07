@@ -5,7 +5,6 @@ import {
   EmitBatchPayload,
   EmitPayload,
   EventListener,
-  ExchangeType,
   IBatchEmitOptions,
   IBatchMessage,
   IEmitOptions,
@@ -45,11 +44,10 @@ export class Emitter implements IEmitter {
     eventName: string,
     options?: IEmitOptions,
     payload?: any,
-  ): Promise<boolean> {
+  ): Promise<void> {
     if (this.options.useExternalBroker) {
       return await this.emitter.emit(eventName, options, payload);
     }
-    return false;
   }
   async emitBatch(
     eventName: string,
