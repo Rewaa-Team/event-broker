@@ -557,11 +557,11 @@ export class SqnsEmitter implements IEmitter {
     this.logger.info(`Consumers started`);
   }
 
-  private startConsumer(queue: Queue) {
+  private addConsumerWorkerToQueue(queue: Queue) {
     if (!queue.url) {
       return;
     }
-    queue.consumer = Consumer.create({
+    const consumer = Consumer.create({
       /**
        * Handling delete message explcitly because sqs-consumer
        * does not delete the successful ones if one of the message
@@ -583,8 +583,8 @@ export class SqnsEmitter implements IEmitter {
       visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
     });
 
-    queue.consumer.on("error", (error, message) => {
-      this.logger.error(`Queue error ${queue.topic.name} ${queue.url} ${JSON.stringify(error)}`);
+    consumer.on("error", (error, message) => {
+      this.logger.error(`Queue error ${JSON.stringify(error)}`);
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueError,
         topic: queue.topic.name,
@@ -594,7 +594,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("processing_error", (error, message) => {
+    consumer.on("processing_error", (error, message) => {
       this.logger.error(`Queue Processing error ${JSON.stringify(error)}`);
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueProcessingError,
@@ -604,7 +604,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("stopped", () => {
+    consumer.on("stopped", () => {
       this.logger.error("Queue stopped");
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueStopped,
@@ -613,7 +613,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("timeout_error", () => {
+    consumer.on("timeout_error", () => {
       this.logger.error("Queue timed out");
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueTimedOut,
@@ -622,12 +622,24 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("empty", () => {
-      if (!queue.consumer?.isRunning) {
+    consumer.on("empty", () => {
+      if (!consumer?.isRunning) {
         this.logger.info(`Queue not running`);
       }
     });
-    queue.consumer.start();
+
+    consumer.start();
+
+    if (!queue.consumers?.length) {
+      queue.consumers = [];
+    }
+    queue.consumers.push(consumer);
+  }
+
+  private startConsumer(queue: Queue) {
+    for (let i = 0; i < (queue.workers ?? 1); i++) {
+      this.addConsumerWorkerToQueue(queue);
+    }
   }
 
   private handleMessageReceipt = async (
@@ -820,7 +832,7 @@ export class SqnsEmitter implements IEmitter {
     message.messageAttributes =
       receivedMessage.MessageAttributes ||
       (receivedMessage as any).messageAttributes ||
-      message.messageAttributes; 
+      message.messageAttributes;
     return message as IMessage<T>;
   }
 
@@ -999,7 +1011,7 @@ export class SqnsEmitter implements IEmitter {
     const urlParts = queueUrl.split('/')
     return urlParts[urlParts.length - 1]
   }
- 
+
   private getApproximateReceiveCount(receivedMessage: Message) {
     return receivedMessage.Attributes?.ApproximateReceiveCount
         || (receivedMessage as any).attributes.ApproximateReceiveCount;
