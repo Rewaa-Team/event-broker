@@ -602,11 +602,11 @@ export class SqnsEmitter implements IEmitter {
     this.logger.info(`Consumers started`);
   }
 
-  private startConsumer(queue: Queue) {
+  private addConsumerWorkerToQueue(queue: Queue) {
     if (!queue.url) {
       return;
     }
-    queue.consumer = Consumer.create({
+    const consumer = Consumer.create({
       /**
        * Handling delete message explcitly because sqs-consumer
        * does not delete the successful ones if one of the message
@@ -627,7 +627,7 @@ export class SqnsEmitter implements IEmitter {
       visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
     });
 
-    queue.consumer.on("error", (error, message) => {
+    consumer.on("error", (error, message) => {
       this.logger.error(`Queue error ${JSON.stringify(error)}`);
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueError,
@@ -637,7 +637,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("processing_error", (error, message) => {
+    consumer.on("processing_error", (error, message) => {
       this.logger.error(`Queue Processing error ${JSON.stringify(error)}`);
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueProcessingError,
@@ -647,7 +647,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("stopped", () => {
+    consumer.on("stopped", () => {
       this.logger.error("Queue stopped");
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueStopped,
@@ -656,7 +656,7 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("timeout_error", () => {
+    consumer.on("timeout_error", () => {
       this.logger.error("Queue timed out");
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueTimedOut,
@@ -665,12 +665,24 @@ export class SqnsEmitter implements IEmitter {
       });
     });
 
-    queue.consumer.on("empty", () => {
-      if (!queue.consumer?.isRunning) {
+    consumer.on("empty", () => {
+      if (!consumer?.isRunning) {
         this.logger.info(`Queue not running`);
       }
     });
-    queue.consumer.start();
+
+    consumer.start();
+
+    if (!queue.consumers?.length) {
+      queue.consumers = [];
+    }
+    queue.consumers.push(consumer);
+  }
+
+  private startConsumer(queue: Queue) {
+    for (let i = 0; i < (queue.workers ?? 1); i++) {
+      this.addConsumerWorkerToQueue(queue);
+    }
   }
 
   private handleMessageReceipt = async (

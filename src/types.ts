@@ -159,7 +159,7 @@ export interface IFailedEventMessage {
 export interface Queue {
   name: string;
   isFifo: boolean;
-  consumer?: Consumer;
+  consumers?: Consumer[];
   url?: string;
   arn?: string;
   isDLQ?: boolean;
@@ -169,6 +169,7 @@ export interface Queue {
   listenerIsLambda?: boolean;
   topic: Topic;
   allTopics: Topic[];
+  workers?: number;
 }
 
 export interface Topic {
