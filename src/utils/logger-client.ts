@@ -1,0 +1,39 @@
+import { inspect } from "node:util";
+import { Logger as ILogger, LogI } from "../types";
+
+export class LoggerClient implements ILogger {
+  constructor(private readonly environment: string) {}
+
+  private log(level: number, message: LogI) {
+    let log: Record<string, unknown> = {
+      level,
+      time: new Date().valueOf(),
+      environment: this.environment,
+      context: "EventBrokerLog",
+    };
+
+    if (typeof message === "string") {
+      log = { ...log, message };
+    } else {
+      log = { ...log, ...message };
+    }
+
+    console.log(inspect(log, { depth: null }));
+  }
+
+  public error(error: LogI) {
+    this.log(50, error);
+  }
+
+  public warn(message: LogI) {
+    this.log(40, message);
+  }
+
+  public debug(message: LogI) {
+    this.log(20, message);
+  }
+
+  public info(message: LogI) {
+    this.log(30, message);
+  }
+}
