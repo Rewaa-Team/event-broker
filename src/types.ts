@@ -133,7 +133,7 @@ export interface IFailedEventMessage {
 export interface Queue {
   name: string;
   isFifo: boolean;
-  consumer?: Consumer;
+  consumers?: Consumer[];
   url?: string;
   arn?: string;
   isDLQ?: boolean;
@@ -142,6 +142,7 @@ export interface Queue {
   listenerIsLambda?: boolean;
   topic: Topic;
   allTopics: Topic[];
+  workers?: number;
 }
 
 export interface Topic {
@@ -250,6 +251,11 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
+
+  /**
+   * The number of workers attached to this queue
+   */
+  workers?: number;
 }
 
 export interface Hooks {
@@ -385,6 +391,7 @@ export interface MessageMetaData {
   executionContext: ProcessMessageContext;
   messageId?: string;
   messageAttributes?: { [key: string]: MessageAttributeValue };
+  approximateReceiveCount?: number;
 }
 
 export type EventListener<T> = (args: T, metadata?: MessageMetaData) => Promise<void>;
