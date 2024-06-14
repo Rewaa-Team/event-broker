@@ -789,6 +789,7 @@ export class SqnsEmitter implements IEmitter {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
+          approximateReceiveCount: this.getApproximateReceiveCount(receivedMessage),
         });
       }
       await this.options.hooks?.afterConsume?.(message.eventName, message.data);
@@ -820,7 +821,6 @@ export class SqnsEmitter implements IEmitter {
       receivedMessage.MessageAttributes ||
       (receivedMessage as any).messageAttributes ||
       message.messageAttributes; 
-    this.saveApproximateReceiveCount(receivedMessage, message);
     return message as IMessage<T>;
   }
 
@@ -999,17 +999,7 @@ export class SqnsEmitter implements IEmitter {
     const urlParts = queueUrl.split('/')
     return urlParts[urlParts.length - 1]
   }
-
-  private saveApproximateReceiveCount(receivedMessage: Message, message: IMessage<any>) {
-    const approximateRecievedCount = this.getApproximateReceiveCount(receivedMessage);
-    if (message.messageAttributes) {
-      message.messageAttributes['ApproximateReceiveCount'] = {
-        StringValue: approximateRecievedCount,
-        DataType: 'Number',
-      }
-    }
-  }
-
+ 
   private getApproximateReceiveCount(receivedMessage: Message) {
     return receivedMessage.Attributes?.ApproximateReceiveCount
         || (receivedMessage as any).attributes.ApproximateReceiveCount;
