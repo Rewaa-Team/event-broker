@@ -572,6 +572,7 @@ export class SqnsEmitter implements IEmitter {
       region: this.options.awsConfig?.region,
       queueUrl: queue.url,
       messageAttributeNames: ["All"],
+      attributeNames: ["ApproximateReceiveCount"],
       handleMessageBatch: async (messages) => {
         await this.processMessages(messages as Message[], {
           shouldDeleteMessage: true,
@@ -819,6 +820,7 @@ export class SqnsEmitter implements IEmitter {
       receivedMessage.MessageAttributes ||
       (receivedMessage as any).messageAttributes ||
       message.messageAttributes; 
+    this.saveApproximateReceiveCount(receivedMessage, message);
     return message as IMessage<T>;
   }
 
@@ -996,5 +998,20 @@ export class SqnsEmitter implements IEmitter {
   private getQueueNameFromUrl(queueUrl: string) {
     const urlParts = queueUrl.split('/')
     return urlParts[urlParts.length - 1]
+  }
+
+  private saveApproximateReceiveCount(receivedMessage: Message, message: IMessage<any>) {
+    const approximateRecievedCount = this.getApproximateReceiveCount(receivedMessage);
+    if (message.messageAttributes) {
+      message.messageAttributes['ApproximateReceiveCount'] = {
+        StringValue: approximateRecievedCount,
+        DataType: 'Number',
+      }
+    }
+  }
+
+  private getApproximateReceiveCount(receivedMessage: Message) {
+    return receivedMessage.Attributes?.ApproximateReceiveCount
+        || (receivedMessage as any).attributes.ApproximateReceiveCount;
   }
 }
