@@ -584,7 +584,7 @@ export class SqnsEmitter implements IEmitter {
     });
 
     consumer.on("error", (error, message) => {
-      this.logger.error(`Queue error ${JSON.stringify(error)}`);
+      this.logger.error(`Queue error ${queue.topic.name} ${queue.url} ${JSON.stringify(error)}`);
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueError,
         topic: queue.topic.name,
