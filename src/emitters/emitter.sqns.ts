@@ -727,6 +727,7 @@ export class SqnsEmitter implements IEmitter {
         listenerIsLambda: !!topic.lambdaHandler,
         topic,
         allTopics: [topic],
+        workers: topic.workers,
       };
       this.queues.set(queueName, queue);
     } else {
