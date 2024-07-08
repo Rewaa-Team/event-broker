@@ -14,3 +14,5 @@ export const DEFAULT_QUEUE_NAME_STANDARD = 'default';
 export const TOPIC_SUBSCRIBE_CHUNK_SIZE = 50;
 export const PAYLOAD_STRUCTURE_VERSION_V1 = 'v1';
 export const PAYLOAD_STRUCTURE_VERSION_V2 = 'v2';
+export const DEFAULT_OUTBOX_TOPIC_NAME = 'process_outbox';
+export const DEFAULT_OUTBOX_TOPIC_DELAY = 5;
