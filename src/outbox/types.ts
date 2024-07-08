@@ -56,6 +56,7 @@ export interface OutboxEvent {
   error?: unknown;
   failureResponse?: OutboxEventFailureResponse[];
   status: OutboxEventStatus;
+  [key: string]: any;
 }
 
 export interface OutboxEventFailureResponse {
