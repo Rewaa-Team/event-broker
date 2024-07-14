@@ -782,17 +782,22 @@ export class SqnsEmitter implements IEmitter {
                 : this.options.defaultQueueOptions?.standard.name) ||
               "",
         isFifo: this.isConsumerFifo(topic),
-        batchSize: topic.batchSize || DEFAULT_BATCH_SIZE,
+        batchSize:
+          topic.consumerGroup?.batchSize ||
+          topic.batchSize ||
+          DEFAULT_BATCH_SIZE,
         visibilityTimeout:
-          topic.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
-        delay: topic.delay,
+          topic.consumerGroup?.visibilityTimeout ||
+          topic.visibilityTimeout ||
+          DEFAULT_VISIBILITY_TIMEOUT,
+        delay: topic.consumerGroup?.delay || topic.delay,
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
         listenerIsLambda: !!topic.lambdaHandler,
         topic,
         allTopics: [topic],
-        workers: topic.workers,
+        workers: topic.consumerGroup?.workers || topic.workers,
       };
       this.queues.set(queueName, queue);
     } else {
