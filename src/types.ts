@@ -166,6 +166,9 @@ export interface Queue {
   visibilityTimeout?: number;
   delay?: number;
   batchSize?: number;
+  /**
+   * @deprecated
+   */
   listenerIsLambda?: boolean;
   topic: Topic;
   allTopics: Topic[];
