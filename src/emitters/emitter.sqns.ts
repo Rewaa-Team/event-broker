@@ -237,7 +237,11 @@ export class SqnsEmitter implements IEmitter {
     });
     queues.forEach((queue) => {
       const topic = queue.topic;
-      queueCreationPromises.push(this.createQueue(topic));
+      queueCreationPromises.push(this.createQueue({
+        ...topic,
+        visibilityTimeout: queue.visibilityTimeout,
+        batchSize: queue.batchSize,
+      }));
     });
     const responses = await Promise.allSettled(queueCreationPromises);
     responses.forEach((response, index) => {
