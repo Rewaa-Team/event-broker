@@ -237,11 +237,16 @@ export class SqnsEmitter implements IEmitter {
     });
     queues.forEach((queue) => {
       const topic = queue.topic;
-      queueCreationPromises.push(this.createQueue({
-        ...topic,
-        visibilityTimeout: queue.visibilityTimeout,
-        batchSize: queue.batchSize,
-      }));
+      queueCreationPromises.push(
+        this.createQueue({
+          ...topic,
+          visibilityTimeout: queue.visibilityTimeout,
+          batchSize: queue.batchSize,
+          delay: queue.delay,
+          retentionPeriod: queue.retentionPeriod,
+          maxRetryCount: queue.maxRetryCount,
+        })
+      );
     });
     const responses = await Promise.allSettled(queueCreationPromises);
     responses.forEach((response, index) => {
@@ -636,7 +641,9 @@ export class SqnsEmitter implements IEmitter {
     });
 
     consumer.on("error", (error, message) => {
-      this.logger.error(`Queue error ${queue.topic.name} ${queue.url} ${JSON.stringify(error)}`);
+      this.logger.error(
+        `Queue error ${queue.topic.name} ${queue.url} ${JSON.stringify(error)}`
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.QueueError,
         topic: queue.topic.name,
@@ -795,6 +802,10 @@ export class SqnsEmitter implements IEmitter {
           topic.visibilityTimeout ||
           DEFAULT_VISIBILITY_TIMEOUT,
         delay: topic.consumerGroup?.delay || topic.delay,
+        maxRetryCount:
+          topic.consumerGroup?.maxRetryCount || topic.maxRetryCount,
+        retentionPeriod:
+          topic.consumerGroup?.retentionPeriod || topic.retentionPeriod,
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,
@@ -889,7 +900,8 @@ export class SqnsEmitter implements IEmitter {
           executionContext,
           messageId: message.id,
           messageAttributes: message.messageAttributes,
-          approximateReceiveCount: this.getApproximateReceiveCount(receivedMessage),
+          approximateReceiveCount:
+            this.getApproximateReceiveCount(receivedMessage),
         });
       }
       await this.options.hooks?.afterConsume?.(message.eventName, message.data);
@@ -1187,7 +1199,9 @@ export class SqnsEmitter implements IEmitter {
   }
 
   private getApproximateReceiveCount(receivedMessage: Message) {
-    return receivedMessage.Attributes?.ApproximateReceiveCount
-        || (receivedMessage as any).attributes.ApproximateReceiveCount;
+    return (
+      receivedMessage.Attributes?.ApproximateReceiveCount ||
+      (receivedMessage as any).attributes.ApproximateReceiveCount
+    );
   }
 }

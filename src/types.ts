@@ -165,6 +165,8 @@ export interface Queue {
   isDLQ?: boolean;
   visibilityTimeout?: number;
   delay?: number;
+  retentionPeriod?: number;
+  maxRetryCount?: number;
   batchSize?: number;
   /**
    * @deprecated
