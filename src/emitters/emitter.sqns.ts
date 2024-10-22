@@ -9,6 +9,7 @@ import {
   DLQ_PREFIX,
   PAYLOAD_STRUCTURE_VERSION_V2,
   SOURCE_QUEUE_PREFIX,
+  TAG_QUEUE_CHUNK_SIZE,
   TOPIC_SUBSCRIBE_CHUNK_SIZE,
 } from "../constants";
 import { v4 } from "uuid";
@@ -45,6 +46,7 @@ import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
 import { IOutbox, OutboxConfig, OutboxEventPayload } from "../outbox/types";
 import { Outbox } from "../outbox/outbox.sqns";
+import { delay } from "../utils/utils";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -116,8 +118,25 @@ export class SqnsEmitter implements IEmitter {
     }
     await this.createTopics();
     await this.createQueues();
+    await this.tagQueues();
     await this.subscribeToTopics();
     await this.createEventSourceMappings();
+  }
+
+  private async tagQueues() {
+    const queues = Array.from(this.queues, ([_, value]) => {
+      return value;
+    }).filter((queue) => queue.url && queue.tags);
+    for (let i = 0; i < queues.length; i += TAG_QUEUE_CHUNK_SIZE) {
+      const queueChunk = queues.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
+      const promises = [];
+      for (const queue of queueChunk) {
+        promises.push(this.sqsProducer.tagQueue(queue.url!, queue.tags!));
+      }
+      await Promise.all(promises);
+      await delay(1000);
+    }
+    this.logger.info(`Queues tagged`);
   }
 
   private async createEventSourceMappings() {
@@ -245,6 +264,7 @@ export class SqnsEmitter implements IEmitter {
           delay: queue.delay,
           retentionPeriod: queue.retentionPeriod,
           maxRetryCount: queue.maxRetryCount,
+          tags: queue.tags,
         })
       );
     });
@@ -302,6 +322,7 @@ export class SqnsEmitter implements IEmitter {
           );
         }
         await Promise.all(subscriptionPromises);
+        await delay(1000);
         subscriptionPromises = [];
       }
     }
@@ -806,6 +827,7 @@ export class SqnsEmitter implements IEmitter {
           topic.consumerGroup?.maxRetryCount || topic.maxRetryCount,
         retentionPeriod:
           topic.consumerGroup?.retentionPeriod || topic.retentionPeriod,
+        tags: topic.consumerGroup?.tags || topic.tags,
         url: this.getQueueUrl(queueName),
         arn: this.getQueueArn(this.getQueueName(topic)),
         isDLQ: false,

@@ -13,6 +13,7 @@ import {
   SendMessageBatchRequest,
   DeleteMessageBatchRequest,
   MessageAttributeValue,
+  TagQueueCommandInput,
 } from "@aws-sdk/client-sqs";
 import {
   IMessage,
@@ -33,10 +34,7 @@ import { v4 } from "uuid";
 
 export class SQSProducer {
   private readonly sqs: SQS;
-  constructor(
-    private readonly logger: Logger,
-    config: SQSClientConfig
-  ) {
+  constructor(private readonly logger: Logger, config: SQSClientConfig) {
     this.sqs = new SQS(config);
   }
 
@@ -60,9 +58,7 @@ export class SQSProducer {
     messageOptions: ISQSMessageOptions
   ) {
     const params: SendMessageRequest = {
-      MessageBody: JSON.stringify(
-        message
-      ),
+      MessageBody: JSON.stringify(message),
       QueueUrl: queueUrl,
       DelaySeconds: messageOptions.delay,
       MessageAttributes: this.getMessageAttributes(queueUrl, message),
@@ -77,9 +73,11 @@ export class SQSProducer {
 
   sendBatch = async (
     queueUrl: string,
-    messages: ISQSMessage[],
+    messages: ISQSMessage[]
   ): Promise<SendMessageBatchResult> => {
-    return await this.sqs.sendMessageBatch(this.getBatchMessageRequest(queueUrl, messages));
+    return await this.sqs.sendMessageBatch(
+      this.getBatchMessageRequest(queueUrl, messages)
+    );
   };
 
   getBatchMessageRequest(
@@ -107,7 +105,8 @@ export class SQSProducer {
 
   createQueue = async (
     queueName: string,
-    attributes: Record<string, string>
+    attributes: Record<string, string>,
+    tags?: Record<string, string>
   ): Promise<string | undefined> => {
     attributes = attributes || {};
     if (this.isFifoQueue(queueName)) {
@@ -116,6 +115,7 @@ export class SQSProducer {
     const params: CreateQueueRequest = {
       QueueName: queueName,
       Attributes: attributes,
+      tags,
     };
 
     try {
@@ -179,9 +179,15 @@ export class SQSProducer {
     const queueUrl = await this.getQueueUrl(queueName);
     if (queueUrl) {
       await this.setQueueAttributes(queueUrl, queueAttributes);
+      if (topic.tags) {
+        await this.sqs.tagQueue({
+          QueueUrl: queueUrl,
+          Tags: topic.tags,
+        });
+      }
       return;
     }
-    await this.createQueue(queueName, queueAttributes);
+    await this.createQueue(queueName, queueAttributes, topic.tags);
   }
 
   getQueueAttributes = async (
@@ -193,8 +199,7 @@ export class SQSProducer {
       AttributeNames: attributes,
     };
     try {
-      const { Attributes } = await this.sqs
-        .getQueueAttributes(params);
+      const { Attributes } = await this.sqs.getQueueAttributes(params);
       return Attributes;
     } catch (error) {
       this.logger.error(`Failed to fetch queue attributes: ${queueUrl}`);
@@ -227,7 +232,9 @@ export class SQSProducer {
       await this.sqs.deleteMessage(params);
       return true;
     } catch (error) {
-      this.logger.error(`Message deletion failed: ${queueUrl} - ${receiptHandle}`);
+      this.logger.error(
+        `Message deletion failed: ${queueUrl} - ${receiptHandle}`
+      );
       throw error;
     }
   };
@@ -262,7 +269,9 @@ export class SQSProducer {
       const result = await this.sqs.getQueueUrl(params);
       return result.QueueUrl;
     } catch (error) {
-      this.logger.error(`Queue not found, creating new: ${queueName} \n ${error}`);
+      this.logger.error(
+        `Queue not found, creating new: ${queueName} \n ${error}`
+      );
       return undefined;
     }
   };
@@ -279,6 +288,19 @@ export class SQSProducer {
       await this.sqs.setQueueAttributes(params);
     } catch (error) {
       this.logger.error(`setQueueAttributes failed for queueUrl: ${queueUrl}`);
+      throw error;
+    }
+  };
+
+  tagQueue = async (queueUrl: string, tags: Record<string, string>) => {
+    const params: TagQueueCommandInput = {
+      QueueUrl: queueUrl,
+      Tags: tags,
+    };
+    try {
+      await this.sqs.tagQueue(params);
+    } catch (error) {
+      this.logger.error(`tagQueue failed for queueUrl: ${queueUrl}`);
       throw error;
     }
   };

@@ -23,3 +23,7 @@ export class Logger implements ILogger {
     console.info(`EventBrokerLog ::: ${message}`);
   }
 }
+
+export const delay = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
