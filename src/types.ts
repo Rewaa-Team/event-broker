@@ -165,6 +165,9 @@ export interface Queue {
   isDLQ?: boolean;
   visibilityTimeout?: number;
   delay?: number;
+  retentionPeriod?: number;
+  maxRetryCount?: number;
+  tags?: Record<string, string>;
   batchSize?: number;
   /**
    * @deprecated
@@ -292,6 +295,13 @@ export interface Topic {
    * The number of workers attached to this queue
    */
   workers?: number;
+
+  /**
+   * tags for queue identification
+   * should be less than 50
+   * each tag should be less than 128 characters
+   */
+  tags?: Record<string, string>;
 }
 
 export interface Hooks {

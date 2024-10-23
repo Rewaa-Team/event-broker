@@ -195,6 +195,7 @@ Following table shows which properties are automatically updated when bootstrapp
 | enableHighThroughput  | Yes  |
 | retentionPeriod  | Yes  |
 | contentBasedDeduplication  | Yes  |
+| tags | Yes
 
 # Roadmap
 
