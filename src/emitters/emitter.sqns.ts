@@ -128,7 +128,7 @@ export class SqnsEmitter implements IEmitter {
       return value;
     }).filter((queue) => queue.url && queue.tags);
     for (let i = 0; i < queues.length; i += TAG_QUEUE_CHUNK_SIZE) {
-      const queueChunk = queues.slice(i, i + TOPIC_SUBSCRIBE_CHUNK_SIZE);
+      const queueChunk = queues.slice(i, i + TAG_QUEUE_CHUNK_SIZE);
       const promises = [];
       for (const queue of queueChunk) {
         promises.push(this.sqsProducer.tagQueue(queue.url!, queue.tags!));
