@@ -988,11 +988,8 @@ export class SqnsEmitter implements IEmitter {
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
     }
-    // TODO: Remove message.messageAttributes in future release
     message.messageAttributes =
-      receivedMessage.MessageAttributes ||
-      (receivedMessage as any).messageAttributes ||
-      message.messageAttributes;
+      snsMessage.MessageAttributes || receivedMessage.MessageAttributes;
     return message as IMessage<T>;
   }
 
