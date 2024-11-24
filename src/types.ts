@@ -467,9 +467,9 @@ export interface IEmitter {
    * @param messages A list of max 10 messages to send as a batch
    * @param options Optional batch emit options
    */
-  emitBatch(
+  emitBatch<T = any>(
     eventName: string,
-    messages: IBatchMessage[],
+    messages: IBatchMessage<T>[],
     options?: IBatchEmitOptions
   ): Promise<IFailedEmitBatchMessage[]>;
   on<T>(
