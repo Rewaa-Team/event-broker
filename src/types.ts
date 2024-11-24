@@ -110,11 +110,11 @@ export type IBatchEmitOptions = Pick<
   "isFifo" | "exchangeType" | "consumerGroup" | "outboxData"
 >;
 
-export type IBatchMessage = Omit<
+export type IBatchMessage<T = any> = Omit<
   IEmitOptions,
   "isFifo" | "exchangeType" | "consumerGroup"
 > & {
-  data: any;
+  data: T;
   /**
    * A batch-level unique id. Used for reporting the result
    * of the batch api
@@ -461,7 +461,7 @@ export interface IEmitter {
    * Only required if Emitter.on is not used
    */
   bootstrap(topics?: Topic[]): Promise<void>;
-  emit(eventName: string, options?: IEmitOptions, payload?: any): Promise<void>;
+  emit<T = any>(eventName: string, options?: IEmitOptions, payload?: T): Promise<void>;
   /**
    * @param eventName Name of the topic/event to emit in batch
    * @param messages A list of max 10 messages to send as a batch
