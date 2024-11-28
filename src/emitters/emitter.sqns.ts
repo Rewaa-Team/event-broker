@@ -886,8 +886,10 @@ export class SqnsEmitter implements IEmitter {
       message.data = message.data[0];
     }
 
-    const outboxEventName = this.getOutboxTopicName();
-    if (message.eventName === outboxEventName) {
+    if (
+      this.options.outboxConfig &&
+      message.eventName === this.getOutboxTopicName()
+    ) {
       await this.handleOutboxEvent(message.data);
       return;
     }
