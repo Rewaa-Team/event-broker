@@ -37,8 +37,9 @@ import {
   IMessage,
   EmitPayload,
   EmitBatchPayload,
+  MessageAttributes,
 } from "../types";
-import { PublishResponse, SubscribeResponse } from "@aws-sdk/client-sns";
+import { MessageAttributeValue, PublishResponse, SubscribeResponse } from "@aws-sdk/client-sns";
 import { Message, SendMessageResult } from "@aws-sdk/client-sqs";
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
@@ -990,9 +991,24 @@ export class SqnsEmitter implements IEmitter {
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
     }
-    message.messageAttributes =
-      snsMessage.MessageAttributes || receivedMessage.MessageAttributes;
+    message.messageAttributes = snsMessage.TopicArn
+      ? this.mapMessageAttributesFromSNS(snsMessage.MessageAttributes)
+      : receivedMessage.MessageAttributes;
     return message as IMessage<T>;
+  }
+
+  private mapMessageAttributesFromSNS(attributes: Record<string, any>): Record<string, any> {
+    const messageAttributes: Record<string, any> = {};
+    Object.keys(attributes).forEach((key) => {
+      const { Type, Value } =  attributes[key] || {};
+      const valueKey: string = Type === 'Binary' ? 'BinaryValue' : Type === 'String' ? 'StringValue' : 'Value';
+      const typeKey: string = valueKey === 'Value' ? 'Type' : 'DataType';
+      messageAttributes[key] = {
+        [typeKey]: Type,
+        [valueKey]: Value,
+      };
+    });
+    return messageAttributes;
   }
 
   private async deleteMessages(

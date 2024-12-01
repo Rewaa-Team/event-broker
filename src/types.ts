@@ -22,11 +22,13 @@ export interface Logger {
   info(message: any): void;
 }
 
+export type MessageAttributes = { [key: string]: MessageAttributeValue };
+
 export interface IMessage<T> {
   data: T;
   eventName: string;
   messageGroupId?: string;
-  messageAttributes?: { [key: string]: MessageAttributeValue };
+  messageAttributes?: MessageAttributes;
   deduplicationId?: string;
   id?: string;
   delay?: number;
@@ -91,7 +93,7 @@ export interface IEmitOptions {
   /**
    * Message attributes to be sent along with the message
    */
-  MessageAttributes?: { [key: string]: MessageAttributeValue };
+  MessageAttributes?: MessageAttributes;
   /**
    * Set to a unique id if you want to avoid duplications in
    * a FIFO queue. The same deduplicationId sent within a 5
@@ -445,7 +447,7 @@ export type DefaultQueueOptions = Omit<
 export interface MessageMetaData {
   executionContext: ProcessMessageContext;
   messageId?: string;
-  messageAttributes?: { [key: string]: MessageAttributeValue };
+  messageAttributes?: MessageAttributes;
   approximateReceiveCount?: number;
 }
 
@@ -592,7 +594,7 @@ export interface ISNSReceiveMessage {
   TopicArn: string;
   Type: string;
   UnsubscribeURL: string;
-  MessageAttributes: { [key: string]: MessageAttributeValue };
+  MessageAttributes: MessageAttributes;
 }
 
 export type QueueEmitPayload = SendMessageRequest;
