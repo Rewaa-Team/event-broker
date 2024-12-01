@@ -988,12 +988,11 @@ export class SqnsEmitter implements IEmitter {
     const body = receivedMessage.Body || (receivedMessage as any).body;
     snsMessage = JSON.parse(body.toString());
     message = snsMessage as any;
+    message.messageAttributes = receivedMessage.MessageAttributes;
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
+      message.messageAttributes = this.mapMessageAttributesFromSNS(snsMessage.MessageAttributes);
     }
-    message.messageAttributes = snsMessage.TopicArn
-      ? this.mapMessageAttributesFromSNS(snsMessage.MessageAttributes)
-      : receivedMessage.MessageAttributes;
     return message as IMessage<T>;
   }
 
