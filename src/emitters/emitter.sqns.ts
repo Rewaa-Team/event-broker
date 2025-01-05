@@ -948,15 +948,19 @@ export class SqnsEmitter implements IEmitter {
         idempotency.strategy === ConsumerIdempotencyStrategy.DeduplicationId &&
         message.deduplicationId
       ) {
-        consumerDeduplicationKey = `${message.eventName}-${message.deduplicationId}`;
+        consumerDeduplicationKey = `${message.eventName}-${queueUrl}-${message.deduplicationId}`;
       } else if (
         idempotency.strategy === ConsumerIdempotencyStrategy.PayloadHash
       ) {
-        consumerDeduplicationKey = `${message.eventName}-${createHash("sha256")
+        consumerDeduplicationKey = `${
+          message.eventName
+        }-${queueUrl}-${createHash("sha256")
           .update(JSON.stringify(message.data))
           .digest("hex")}`;
       } else if (idempotency.strategy === ConsumerIdempotencyStrategy.Custom) {
-        consumerDeduplicationKey = idempotency.key?.(message.data, metadata);
+        consumerDeduplicationKey = `${
+          message.eventName
+        }-${queueUrl}-${idempotency.key?.(message.data, metadata)}`;
       }
     }
 
