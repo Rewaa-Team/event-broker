@@ -47,7 +47,7 @@ export class DynamoClient {
 
       // Default expiry is 5s
       expiresAt = Math.floor(
-        (new Date().getTime() + (expiry || 90 * 24 * 60 * 60 * 1000)) / 1000
+        (new Date().getTime() + (expiry || 5) * 1000) / 1000
       );
       await this.client.putItem({
         ...input,
