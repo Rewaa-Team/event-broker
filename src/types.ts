@@ -14,6 +14,7 @@ import {
 } from "@aws-sdk/client-sns";
 import { LambdaClientConfig } from "@aws-sdk/client-lambda";
 import { OutboxConfig } from "./outbox/types";
+import { DynamoDBClientConfig } from "@aws-sdk/client-dynamodb";
 
 export interface Logger {
   error(error: any): void;
@@ -178,6 +179,32 @@ export interface Queue {
   topic: Topic;
   allTopics: Topic[];
   workers?: number;
+  consumerIdempotency?: ConsumerIdempotencyOptions;
+}
+
+export enum ConsumerIdempotencyStrategy {
+  DeduplicationId = "DeduplicationId",
+  PayloadHash = "PayloadHash",
+  Custom = "Custom",
+}
+
+export interface ConsumerIdempotencyOptions {
+    /**
+     * The strategy to use for idempotency
+     */
+    strategy: ConsumerIdempotencyStrategy;
+    /**
+     * The key to use for idempotency if strategy is Custom
+     */
+    key?<T>(payload: T, metadata: MessageMetaData): string;
+    /**
+     * The time for which the idempotency should be maintained
+     *
+     * Default: 1 Day
+     *
+     * Unit: s
+     */
+    expiry?: number;
 }
 
 export interface Topic {
@@ -286,12 +313,12 @@ export interface Topic {
    * Default value is false (off)
    */
   contentBasedDeduplication?: boolean;
-   /**
+  /**
    * Delay receiving the message on consumer
    *
    * Unit: s
    */
-   delay?: number;
+  delay?: number;
 
   /**
    * The number of workers attached to this queue
@@ -304,6 +331,11 @@ export interface Topic {
    * each tag should be less than 128 characters
    */
   tags?: Record<string, string>;
+
+  /**
+   * Optional consumer level idempotency options
+   */
+  idempotency?: ConsumerIdempotencyOptions;
 }
 
 export interface Hooks {
@@ -393,6 +425,10 @@ export interface IEmitterOptions {
    */
   lambdaConfig?: LambdaClientConfig;
   /**
+   * Optional DynamoDB Client config used by the broker to build consumer idempotency
+   */
+  dynamoConfig?: DynamoDBClientConfig;
+  /**
    * Optional default queues options when consuming on a default queue
    *
    * When using default queues, Topics for which a separateConsumerGroup
@@ -437,6 +473,10 @@ export interface IEmitterOptions {
    * The name of your service
    */
   serviceName: string;
+  /**
+   * Optional global level idempotency options
+   */
+  consumerIdempotency?: ConsumerIdempotencyOptions;
 }
 
 export type DefaultQueueOptions = Omit<
