@@ -37,9 +37,10 @@ import {
   IMessage,
   EmitPayload,
   EmitBatchPayload,
-  MessageAttributes,
+  ConsumerIdempotencyStrategy,
+  MessageMetaData,
 } from "../types";
-import { MessageAttributeValue, PublishResponse, SubscribeResponse } from "@aws-sdk/client-sns";
+import { PublishResponse, SubscribeResponse } from "@aws-sdk/client-sns";
 import { Message, SendMessageResult } from "@aws-sdk/client-sqs";
 import { EventSourceMappingConfiguration } from "@aws-sdk/client-lambda";
 import { SNSProducer } from "../producers/producer.sns";
@@ -48,11 +49,16 @@ import { LambdaClient } from "../utils/lambda.client";
 import { IOutbox, OutboxConfig, OutboxEventPayload } from "../outbox/types";
 import { Outbox } from "../outbox/outbox.sqns";
 import { delay } from "../utils/utils";
+import { DynamoClient } from "../utils/dynamo.client";
+import { DynamoTable } from "../utils/types";
+import { DynamoTablesStructure } from "../utils/constants";
+import { createHash } from "crypto";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
   private sqsProducer!: SQSProducer;
   private lambdaClient!: LambdaClient;
+  private dynamoClient!: DynamoClient;
   private localEmitter!: EventEmitter;
   private options!: IEmitterOptions;
   private topicListeners: Map<string, EventListener<any>[]> = new Map();
@@ -81,6 +87,10 @@ export class SqnsEmitter implements IEmitter {
     this.lambdaClient = new LambdaClient(
       this.logger,
       this.options.lambdaConfig || { ...this.options.awsConfig }
+    );
+    this.dynamoClient = new DynamoClient(
+      this.logger,
+      this.options.dynamoConfig || { ...this.options.awsConfig }
     );
     this.addDefaultTopics();
     if (this.options.outboxConfig) {
@@ -122,6 +132,9 @@ export class SqnsEmitter implements IEmitter {
     await this.tagQueues();
     await this.subscribeToTopics();
     await this.createEventSourceMappings();
+    await this.dynamoClient.createTable(
+      DynamoTablesStructure[DynamoTable.Idempotency]
+    );
   }
 
   private async tagQueues() {
@@ -836,6 +849,10 @@ export class SqnsEmitter implements IEmitter {
         topic,
         allTopics: [topic],
         workers: topic.consumerGroup?.workers || topic.workers,
+        consumerIdempotency:
+          topic.consumerGroup?.idempotency ||
+          topic.idempotency ||
+          this.options.consumerIdempotency,
       };
       this.queues.set(queueName, queue);
     } else {
@@ -899,6 +916,7 @@ export class SqnsEmitter implements IEmitter {
       message.eventName,
       this.getQueueNameFromUrl(queueUrl)
     );
+
     if (!listeners) {
       this.logger.error(
         `No listener found. Trace Id: ${
@@ -915,21 +933,65 @@ export class SqnsEmitter implements IEmitter {
       throw new Error(`No listener found for event: ${message.eventName}`);
     }
 
+    const metadata: MessageMetaData = {
+      executionContext,
+      messageId: message.id,
+      messageAttributes: message.messageAttributes,
+      approximateReceiveCount: this.getApproximateReceiveCount(receivedMessage),
+    };
+
+    const queue = this.queues.get(this.getQueueNameFromUrl(queueUrl));
+    let consumerDeduplicationKey: string | undefined;
+    if (queue && queue.consumerIdempotency) {
+      const idempotency = queue.consumerIdempotency;
+      if (
+        idempotency.strategy === ConsumerIdempotencyStrategy.DeduplicationId &&
+        message.deduplicationId
+      ) {
+        consumerDeduplicationKey = `${message.eventName}-${message.deduplicationId}`;
+      } else if (
+        idempotency.strategy === ConsumerIdempotencyStrategy.PayloadHash
+      ) {
+        consumerDeduplicationKey = `${message.eventName}-${createHash("sha256")
+          .update(JSON.stringify(message.data))
+          .digest("hex")}`;
+      } else if (idempotency.strategy === ConsumerIdempotencyStrategy.Custom) {
+        consumerDeduplicationKey = idempotency.key?.(message.data, metadata);
+      }
+    }
+
+    if (consumerDeduplicationKey) {
+      const item = await this.dynamoClient.getItem({
+        TableName: DynamoTable.Idempotency,
+        Key: {
+          partitionKey: { S: consumerDeduplicationKey },
+        },
+      });
+      if (item && (!item.expiresAt?.N || +item.expiresAt.N * 1000 > Date.now())) {
+        this.logger.info(
+          `Message already processed. ${queueUrl}_${executionContext.executionTraceId}_Consumer Deduplication ID: ${consumerDeduplicationKey}}`
+        );
+        return;
+      }
+    }
+
     try {
       const data = await this.options.hooks?.beforeConsume?.(
         message.eventName,
         message.data
       );
       for (const listener of listeners) {
-        await listener(data || message.data, {
-          executionContext,
-          messageId: message.id,
-          messageAttributes: message.messageAttributes,
-          approximateReceiveCount:
-            this.getApproximateReceiveCount(receivedMessage),
-        });
+        await listener(data || message.data, metadata);
       }
       await this.options.hooks?.afterConsume?.(message.eventName, message.data);
+      if (consumerDeduplicationKey) {
+        await this.dynamoClient.putItem({
+          TableName: DynamoTable.Idempotency,
+          Item: {
+            partitionKey: { S: consumerDeduplicationKey },
+          },
+        }, queue?.consumerIdempotency?.expiry);
+      }
     } catch (error: any) {
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProcessingFailed,
@@ -991,17 +1053,26 @@ export class SqnsEmitter implements IEmitter {
     message.messageAttributes = receivedMessage.MessageAttributes;
     if (snsMessage.TopicArn) {
       message = JSON.parse(snsMessage.Message);
-      message.messageAttributes = this.mapMessageAttributesFromSNS(snsMessage.MessageAttributes);
+      message.messageAttributes = this.mapMessageAttributesFromSNS(
+        snsMessage.MessageAttributes
+      );
     }
     return message as IMessage<T>;
   }
 
-  private mapMessageAttributesFromSNS(attributes: Record<string, any>): Record<string, any> {
+  private mapMessageAttributesFromSNS(
+    attributes: Record<string, any>
+  ): Record<string, any> {
     const messageAttributes: Record<string, any> = {};
     Object.keys(attributes).forEach((key) => {
-      const { Type, Value } =  attributes[key] || {};
-      const valueKey: string = Type === 'Binary' ? 'BinaryValue' : Type === 'String' ? 'StringValue' : 'Value';
-      const typeKey: string = valueKey === 'Value' ? 'Type' : 'DataType';
+      const { Type, Value } = attributes[key] || {};
+      const valueKey: string =
+        Type === "Binary"
+          ? "BinaryValue"
+          : Type === "String"
+          ? "StringValue"
+          : "Value";
+      const typeKey: string = valueKey === "Value" ? "Type" : "DataType";
       messageAttributes[key] = {
         [typeKey]: Type,
         [valueKey]: Value,
