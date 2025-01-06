@@ -45,9 +45,9 @@ export class DynamoClient {
       const expiryKey =
         DynamoTablesStructure[input.TableName as DynamoTable].expiryKey;
 
-      // Default expiry is 5s
+      // Default expiry is 5 min
       expiresAt = Math.floor(
-        (new Date().getTime() + (expiry || 5) * 1000) / 1000
+        (new Date().getTime() + (expiry || 5 * 60) * 1000) / 1000
       );
       await this.client.putItem({
         ...input,
