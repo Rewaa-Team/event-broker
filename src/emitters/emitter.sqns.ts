@@ -941,42 +941,28 @@ export class SqnsEmitter implements IEmitter {
     };
 
     const queue = this.queues.get(this.getQueueNameFromUrl(queueUrl));
-    let consumerDeduplicationKey: string | undefined;
-    if (queue && queue.consumerIdempotency) {
-      const idempotency = queue.consumerIdempotency;
-      if (
-        idempotency.strategy === ConsumerIdempotencyStrategy.DeduplicationId &&
-        message.deduplicationId
-      ) {
-        consumerDeduplicationKey = `${message.eventName}-${queueUrl}-${message.deduplicationId}`;
-      } else if (
-        idempotency.strategy === ConsumerIdempotencyStrategy.PayloadHash
-      ) {
-        consumerDeduplicationKey = `${
-          message.eventName
-        }-${queueUrl}-${createHash("sha256")
-          .update(JSON.stringify(message.data))
-          .digest("hex")}`;
-      } else if (idempotency.strategy === ConsumerIdempotencyStrategy.Custom) {
-        consumerDeduplicationKey = `${
-          message.eventName
-        }-${queueUrl}-${idempotency.key?.(message.data, metadata)}`;
-      }
+
+    let consumerDeduplicationKey;
+    let isAlreadyProcessed = false;
+
+    if (queue) {
+      consumerDeduplicationKey = this.getDeduplicationKey(
+        queue,
+        message,
+        metadata
+      );
     }
 
     if (consumerDeduplicationKey) {
-      const item = await this.dynamoClient.getItem({
-        TableName: DynamoTable.Idempotency,
-        Key: {
-          partitionKey: { S: consumerDeduplicationKey },
-        },
-      });
-      if (item && (!item.expiresAt?.N || +item.expiresAt.N * 1000 > Date.now())) {
-        this.logger.info(
-          `Message already processed. ${queueUrl}_${executionContext.executionTraceId}_Consumer Deduplication ID: ${consumerDeduplicationKey}}`
-        );
-        return;
-      }
+      isAlreadyProcessed = await this.isMessageAlreadyProcessed(
+        consumerDeduplicationKey,
+        queueUrl,
+        executionContext.executionTraceId
+      );
+    }
+
+    if (isAlreadyProcessed) {
+      return;
     }
 
     try {
@@ -989,12 +975,15 @@ export class SqnsEmitter implements IEmitter {
       }
       await this.options.hooks?.afterConsume?.(message.eventName, message.data);
       if (consumerDeduplicationKey) {
-        await this.dynamoClient.putItem({
-          TableName: DynamoTable.Idempotency,
-          Item: {
-            partitionKey: { S: consumerDeduplicationKey },
+        await this.dynamoClient.putItem(
+          {
+            TableName: DynamoTable.Idempotency,
+            Item: {
+              partitionKey: { S: consumerDeduplicationKey },
+            },
           },
-        }, queue?.consumerIdempotency?.expiry);
+          queue?.consumerIdempotency?.expiry
+        );
       }
     } catch (error: any) {
       this.logFailedEvent({
@@ -1009,6 +998,59 @@ export class SqnsEmitter implements IEmitter {
       throw error;
     }
   }
+
+  private getDeduplicationKey(
+    queue: Queue,
+    message: ISQSMessage,
+    metadata: MessageMetaData
+  ): string | undefined {
+    let consumerDeduplicationKey: string | undefined;
+    if (!queue || !queue.consumerIdempotency) {
+      return;
+    }
+    const idempotency = queue.consumerIdempotency;
+    if (
+      idempotency.strategy === ConsumerIdempotencyStrategy.DeduplicationId &&
+      message.deduplicationId
+    ) {
+      consumerDeduplicationKey = `${message.eventName}-${queue.url}-${message.deduplicationId}`;
+    } else if (
+      idempotency.strategy === ConsumerIdempotencyStrategy.PayloadHash
+    ) {
+      consumerDeduplicationKey = `${message.eventName}-${
+        queue.url
+      }-${createHash("sha256")
+        .update(JSON.stringify(message.data))
+        .digest("hex")}`;
+    } else if (idempotency.strategy === ConsumerIdempotencyStrategy.Custom) {
+      consumerDeduplicationKey = `${message.eventName}-${
+        queue.url
+      }-${idempotency.key?.(message.data, metadata)}`;
+    }
+
+    return consumerDeduplicationKey;
+  }
+
+  private async isMessageAlreadyProcessed(
+    deduplicationKey: string,
+    queueUrl: string,
+    executionTraceId: string
+  ): Promise<boolean> {
+    const item = await this.dynamoClient.getItem({
+      TableName: DynamoTable.Idempotency,
+      Key: {
+        partitionKey: { S: deduplicationKey },
+      },
+    });
+    if (item && (!item.expiresAt?.N || +item.expiresAt.N * 1000 > Date.now())) {
+      this.logger.info(
+        `Message already processed. ${queueUrl}_${executionTraceId}_Consumer Deduplication ID: ${deduplicationKey}}`
+      );
+      return true;
+    }
+    return false;
+  }
+
   private async handleOutboxEvent(data: OutboxEventPayload): Promise<void> {
     if (!this.outbox) {
       throw new Error("Outbox config is not configured");
