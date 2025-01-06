@@ -849,10 +849,10 @@ export class SqnsEmitter implements IEmitter {
         topic,
         allTopics: [topic],
         workers: topic.consumerGroup?.workers || topic.workers,
-        consumerIdempotency:
+        consumerIdempotencyOptions:
           topic.consumerGroup?.idempotency ||
           topic.idempotency ||
-          this.options.consumerIdempotency,
+          this.options.consumerIdempotencyOptions,
       };
       this.queues.set(queueName, queue);
     } else {
@@ -982,7 +982,7 @@ export class SqnsEmitter implements IEmitter {
               partitionKey: { S: consumerDeduplicationKey },
             },
           },
-          queue?.consumerIdempotency?.expiry
+          queue?.consumerIdempotencyOptions?.expiry
         );
       }
     } catch (error: any) {
@@ -1005,10 +1005,10 @@ export class SqnsEmitter implements IEmitter {
     metadata: MessageMetaData
   ): string | undefined {
     let consumerDeduplicationKey: string | undefined;
-    if (!queue || !queue.consumerIdempotency) {
+    if (!queue || !queue.consumerIdempotencyOptions) {
       return;
     }
-    const idempotency = queue.consumerIdempotency;
+    const idempotency = queue.consumerIdempotencyOptions;
     if (
       idempotency.strategy === ConsumerIdempotencyStrategy.DeduplicationId &&
       message.deduplicationId

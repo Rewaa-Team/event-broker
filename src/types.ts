@@ -179,7 +179,7 @@ export interface Queue {
   topic: Topic;
   allTopics: Topic[];
   workers?: number;
-  consumerIdempotency?: ConsumerIdempotencyOptions;
+  consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
 }
 
 export enum ConsumerIdempotencyStrategy {
@@ -476,7 +476,7 @@ export interface IEmitterOptions {
   /**
    * Optional global level idempotency options
    */
-  consumerIdempotency?: ConsumerIdempotencyOptions;
+  consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
 }
 
 export type DefaultQueueOptions = Omit<

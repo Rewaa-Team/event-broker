@@ -1,11 +1,8 @@
 import {
   AttributeValue,
-  GetItemCommand,
   GetItemCommandInput,
-  PutItemCommand,
   DynamoDB,
   DynamoDBClientConfig,
-  CreateTableCommand,
   CreateTableCommandOutput,
   PutItemCommandInput,
   CreateTableCommandInput,
