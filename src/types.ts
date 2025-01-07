@@ -200,7 +200,7 @@ export interface ConsumerIdempotencyOptions {
     /**
      * The time for which the idempotency should be maintained
      *
-     * Default: 1 Day
+     * Default: 5 min
      *
      * Unit: s
      */
