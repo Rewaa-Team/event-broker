@@ -850,8 +850,8 @@ export class SqnsEmitter implements IEmitter {
         allTopics: [topic],
         workers: topic.consumerGroup?.workers || topic.workers,
         consumerIdempotencyOptions:
-          topic.consumerGroup?.idempotency ||
-          topic.idempotency ||
+          topic.consumerGroup?.consumerIdempotencyOptions ||
+          topic.consumerIdempotencyOptions ||
           this.options.consumerIdempotencyOptions,
       };
       this.queues.set(queueName, queue);

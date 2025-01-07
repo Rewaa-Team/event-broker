@@ -335,7 +335,7 @@ export interface Topic {
   /**
    * Optional consumer level idempotency options
    */
-  idempotency?: ConsumerIdempotencyOptions;
+  consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
 }
 
 export interface Hooks {
