@@ -10,6 +10,7 @@ import {
 import { DynamoTablesStructure } from "./constants";
 import { DynamoTable } from "./types";
 import { Logger } from "../types";
+import { delay } from "./utils";
 
 export class DynamoClient {
   private readonly dynamoDB: DynamoDB;
@@ -67,6 +68,7 @@ export class DynamoClient {
       const expiryKey =
         DynamoTablesStructure[command.TableName as DynamoTable].expiryKey;
       if (expiryKey) {
+        await delay(1000);
         await this.client.updateTimeToLive({
           TableName: command.TableName,
           TimeToLiveSpecification: {
