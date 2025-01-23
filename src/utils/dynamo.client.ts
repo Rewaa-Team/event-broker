@@ -10,7 +10,6 @@ import {
 import { DynamoTablesStructure } from "./constants";
 import { DynamoTable } from "./types";
 import { Logger } from "../types";
-import { delay } from "./utils";
 
 export class DynamoClient {
   private readonly dynamoDB: DynamoDB;
@@ -68,7 +67,7 @@ export class DynamoClient {
       const expiryKey =
         DynamoTablesStructure[command.TableName as DynamoTable].expiryKey;
       if (expiryKey) {
-        await delay(1000);
+        await this.waitForTableActive(command.TableName!);
         await this.client.updateTimeToLive({
           TableName: command.TableName,
           TimeToLiveSpecification: {
@@ -90,6 +89,28 @@ export class DynamoClient {
         `Table ${command.TableName} Creation failed: ${JSON.stringify(error)}`
       );
       throw error;
+    }
+  }
+
+  private async waitForTableActive(tableName: string): Promise<void> {
+    this.logger.info(`Waiting for table ${tableName} to become ACTIVE`);
+    let status = "CREATING";
+
+    while (status === "CREATING") {
+      try {
+        const data = await this.client.describeTable({ TableName: tableName });
+        status = data.Table?.TableStatus!;
+        this.logger.debug(`Current status of table ${tableName}: ${status}`);
+      } catch (error: any) {
+        if (error.name === "ResourceNotFoundException") {
+          this.logger.debug(`Table ${tableName} not found, retrying...`);
+        } else {
+          throw error;
+        }
+      }
+      if (status !== "ACTIVE") {
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+      }
     }
   }
 }
