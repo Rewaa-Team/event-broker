@@ -813,10 +813,8 @@ export class SqnsEmitter implements IEmitter {
         topic.exchangeType === ExchangeType.Fanout &&
         !this.options.defaultQueueOptions
       ) {
-        throw new Error(
-          `${topic.name} - separateConsumerGroup is required when defaultQueueOptions are not specified.
-          Or the Exchange Type should be Queue`
-        );
+        this.logger.warn(`No consumer specified for fanout topic ${topic.name}`);
+        return;
       }
       const queue: Queue = {
         name:
