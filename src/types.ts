@@ -189,22 +189,22 @@ export enum ConsumerIdempotencyStrategy {
 }
 
 export interface ConsumerIdempotencyOptions {
-    /**
-     * The strategy to use for idempotency
-     */
-    strategy: ConsumerIdempotencyStrategy;
-    /**
-     * The key to use for idempotency if strategy is Custom
-     */
-    key?<T>(payload: T, metadata: MessageMetaData): string;
-    /**
-     * The time for which the idempotency should be maintained
-     *
-     * Default: 5 min
-     *
-     * Unit: s
-     */
-    expiry?: number;
+  /**
+   * The strategy to use for idempotency
+   */
+  strategy: ConsumerIdempotencyStrategy;
+  /**
+   * The key to use for idempotency if strategy is Custom
+   */
+  key?<T>(payload: T, metadata: MessageMetaData): string;
+  /**
+   * The time for which the idempotency should be maintained
+   *
+   * Default: 5 min
+   *
+   * Unit: s
+   */
+  expiry?: number;
 }
 
 export interface Topic {
@@ -503,7 +503,11 @@ export interface IEmitter {
    * Only required if Emitter.on is not used
    */
   bootstrap(topics?: Topic[]): Promise<void>;
-  emit<T = any>(eventName: string, options?: IEmitOptions, payload?: T): Promise<void>;
+  emit<T = any>(
+    eventName: string,
+    options?: IEmitOptions,
+    payload?: T
+  ): Promise<void>;
   /**
    * @param eventName Name of the topic/event to emit in batch
    * @param messages A list of max 10 messages to send as a batch

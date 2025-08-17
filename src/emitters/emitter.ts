@@ -31,7 +31,7 @@ export class Emitter implements IEmitter {
     this.options = options;
     this.logger = options.logger ?? new Logger(!!this.options.log);
     if (this.options.useExternalBroker) {
-      this.emitter = new SqnsEmitter(this.logger, this.options, );
+      this.emitter = new SqnsEmitter(this.logger, this.options);
     }
   }
 
@@ -43,7 +43,7 @@ export class Emitter implements IEmitter {
   async emit(
     eventName: string,
     options?: IEmitOptions,
-    payload?: any,
+    payload?: any
   ): Promise<void> {
     if (this.options.useExternalBroker) {
       return await this.emitter.emit(eventName, options, payload);
@@ -117,13 +117,18 @@ export class Emitter implements IEmitter {
   getInternalQueueName(topic: Topic): string {
     return this.emitter.getInternalQueueName(topic);
   }
-  getEmitPayload(eventName: string, options?: IEmitOptions, ...args: any[]): EmitPayload {
+  getEmitPayload(
+    eventName: string,
+    options?: IEmitOptions,
+    ...args: any[]
+  ): EmitPayload {
     return this.emitter.getEmitPayload(eventName, options, ...args);
   }
   getBatchEmitPayload(
     eventName: string,
     messages: IBatchMessage[],
-    options?: IBatchEmitOptions): EmitBatchPayload {
+    options?: IBatchEmitOptions
+  ): EmitBatchPayload {
     return this.emitter.getBatchEmitPayload(eventName, messages, options);
   }
   parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
