@@ -64,8 +64,10 @@ export class SqnsEmitter implements IEmitter {
   private topicListeners: Map<string, EventListener<any>[]> = new Map();
   private topics: Map<string, Topic & { isDefaultQueue?: boolean }> = new Map();
   private queues: Map<string, Queue> = new Map();
-  private consumersStarted: boolean = false;
+  private consumersRunning: boolean = false;
   private outbox?: IOutbox;
+  private totalActiveConsumers: number = 0;
+  private totalInflightMessages: number = 0;
 
   constructor(private readonly logger: Logger, options: IEmitterOptions) {
     this.options = options;
@@ -636,7 +638,7 @@ export class SqnsEmitter implements IEmitter {
   }
 
   async startConsumers() {
-    if (this.consumersStarted) {
+    if (this.consumersRunning) {
       return;
     }
     this.queues.forEach((queue) => {
@@ -645,8 +647,49 @@ export class SqnsEmitter implements IEmitter {
       }
       this.startConsumer(queue);
     });
-    this.consumersStarted = true;
+    this.consumersRunning = true;
     this.logger.info(`Consumers started`);
+    process.on("SIGTERM", async () => {
+      this.logger.info(`SIGTERM received, draining all consumers`);
+      await this.drainConsumers();
+    });
+  }
+
+  async drainConsumers(): Promise<void> {
+    this.queues.forEach((queue) => {
+      if (!queue || queue.isDLQ || queue.listenerIsLambda) {
+        return;
+      }
+      this.stopConsumer(queue);
+    });
+
+    this.consumersRunning = false;
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (this.totalInflightMessages <= 0) {
+          this.logger.info(
+            `All consumers drained and messages consumed successfully. See you in a better container hopefully. Adios`
+          );
+          clearInterval(interval);
+          resolve();
+        } else {
+          this.logger.info(
+            `Waiting for consumers to drain: ${this.totalActiveConsumers} active, ${this.totalInflightMessages} inflight messages`
+          );
+        }
+      }, 5000);
+    });
+  }
+
+  private stopConsumer(queue: Queue) {
+    if (!queue.consumers || !queue.consumers.length) {
+      this.logger.warn(`No consumers to stop for queue ${queue.name}`);
+      return;
+    }
+    for (let i = 0; i < queue.consumers.length; i++) {
+      queue.consumers[i].stop();
+    }
+    queue.consumers = [];
   }
 
   private addConsumerWorkerToQueue(queue: Queue) {
@@ -666,10 +709,12 @@ export class SqnsEmitter implements IEmitter {
       messageAttributeNames: ["All"],
       attributeNames: ["ApproximateReceiveCount"],
       handleMessageBatch: async (messages) => {
+        this.totalInflightMessages += messages.length;
         await this.processMessages(messages as Message[], {
           shouldDeleteMessage: true,
           queueReference: queue.url!,
         });
+        this.totalInflightMessages -= messages.length;
       },
       batchSize: queue.batchSize || DEFAULT_BATCH_SIZE,
       visibilityTimeout: queue.visibilityTimeout || DEFAULT_VISIBILITY_TIMEOUT,
@@ -699,11 +744,11 @@ export class SqnsEmitter implements IEmitter {
     });
 
     consumer.on("stopped", () => {
-      this.logger.error("Queue stopped");
-      this.logFailedEvent({
-        failureType: FailedEventCategory.QueueStopped,
+      this.totalActiveConsumers--;
+      this.logger.warn({
         topic: "",
         event: "Queue stopped",
+        queueName: queue.name,
       });
     });
 
@@ -723,6 +768,7 @@ export class SqnsEmitter implements IEmitter {
     });
 
     consumer.start();
+    this.totalActiveConsumers++;
 
     if (!queue.consumers?.length) {
       queue.consumers = [];
@@ -813,7 +859,9 @@ export class SqnsEmitter implements IEmitter {
         topic.exchangeType === ExchangeType.Fanout &&
         !this.options.defaultQueueOptions
       ) {
-        this.logger.warn(`No consumer specified for fanout topic ${topic.name}`);
+        this.logger.warn(
+          `No consumer specified for fanout topic ${topic.name}`
+        );
         return;
       }
       const queue: Queue = {
