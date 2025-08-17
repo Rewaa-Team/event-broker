@@ -667,6 +667,9 @@ export class SqnsEmitter implements IEmitter {
     return new Promise((resolve) => {
       const interval = setInterval(() => {
         if (this.totalActiveConsumers <= 0 && this.totalInflightMessages <= 0) {
+          this.logger.info(
+            `All consumers drained successfully. See you in a better container hopefully. Adios`
+          );
           clearInterval(interval);
           resolve();
         } else {
