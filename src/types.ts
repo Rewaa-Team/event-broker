@@ -33,6 +33,7 @@ export interface IMessage<T> {
   deduplicationId?: string;
   id?: string;
   delay?: number;
+  compressed?: boolean;
 }
 
 export type ISQSMessage = IMessage<any>;
@@ -106,6 +107,10 @@ export interface IEmitOptions {
    * e.g transaction, entity manager etc
    */
   outboxData?: Record<string, any>;
+  /**
+   * Should compress the message before sending
+   */
+  compressed?: boolean;
 }
 
 export type IBatchEmitOptions = Pick<
