@@ -53,6 +53,7 @@ import { DynamoClient } from "../utils/dynamo.client";
 import { DynamoTable } from "../utils/types";
 import { DynamoTablesStructure } from "../utils/constants";
 import { createHash } from "crypto";
+import { brotliCompressSync, brotliDecompressSync } from "zlib";
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -396,7 +397,12 @@ export class SqnsEmitter implements IEmitter {
       /**
        * @todo Un-array this when switching to payload version 2
        */
-      data: [payload],
+      data: options?.compressed
+        ? brotliCompressSync(Buffer.from(JSON.stringify([payload]))).toString(
+            "base64"
+          )
+        : [payload],
+      compressed: options?.compressed,
     });
   }
 
@@ -414,9 +420,14 @@ export class SqnsEmitter implements IEmitter {
         /**
          * @todo Un-array this when switching to payload version 2
          */
-        data: [payload],
+        data: options?.compressed
+          ? brotliCompressSync(Buffer.from(JSON.stringify([payload]))).toString(
+              "base64"
+            )
+          : [payload],
         messageAttributes: options?.MessageAttributes,
         deduplicationId: options?.deduplicationId,
+        compressed: options?.compressed,
       },
       {
         delay: options?.delay || DEFAULT_MESSAGE_DELAY,
@@ -1147,6 +1158,12 @@ export class SqnsEmitter implements IEmitter {
       message = JSON.parse(snsMessage.Message);
       message.messageAttributes = this.mapMessageAttributesFromSNS(
         snsMessage.MessageAttributes
+      );
+    }
+
+    if (message.compressed) {
+      message.data = JSON.parse(
+        brotliDecompressSync(Buffer.from(message.data, "base64")).toString()
       );
     }
     return message as IMessage<T>;
