@@ -479,6 +479,15 @@ export interface IEmitterOptions {
    */
   serviceName: string;
   /**
+   * Optional idempotency flag to turn on idempotency feature for all consumers
+   * If set to true, the broker will create a DynamoDB table to store the idempotency keys
+   * and will use the idempotency options provided at the consumer level or the default
+   * options provided at the global level
+   *
+   * Default is false
+   */
+  disableIdempotency?: boolean;
+  /**
    * Optional global level idempotency options
    */
   consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
