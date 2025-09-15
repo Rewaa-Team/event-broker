@@ -484,9 +484,9 @@ export interface IEmitterOptions {
    * and will use the idempotency options provided at the consumer level or the default
    * options provided at the global level
    *
-   * Default is false
+   * Default is true
    */
-  disableIdempotency?: boolean;
+  useIdempotency?: boolean;
   /**
    * Optional global level idempotency options
    */
