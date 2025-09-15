@@ -135,7 +135,7 @@ export class SqnsEmitter implements IEmitter {
     await this.tagQueues();
     await this.subscribeToTopics();
     await this.createEventSourceMappings();
-    if (this.options.useIdempotency !== false) {
+    if (this.options?.useIdempotency !== false) {
       await this.dynamoClient.createTable(
         DynamoTablesStructure[DynamoTable.Idempotency]
       );
