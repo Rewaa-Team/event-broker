@@ -500,7 +500,7 @@ export interface IEmitterOptions {
    * Does not implement outbox
    */
   mockEmitter?: {
-    catchErrors: boolean;
+    throwErrors: boolean;
   };
 }
 
