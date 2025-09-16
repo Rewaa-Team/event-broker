@@ -46,7 +46,6 @@ export class Emitter implements IEmitter {
     options?: IEmitOptions,
     payload?: any
   ): Promise<void> {
-    this.logger.info(this.localEmitter.eventNames());
     try {
       await this.localEmitter.emitAsync(eventName, payload);
     } catch (error) {
@@ -69,7 +68,6 @@ export class Emitter implements IEmitter {
     options?: IEmitOptions,
     payloads?: any[],
   ): Promise<void> {
-    this.logger.info(this.localEmitter.eventNames());
     try {
       const emitPromises = payloads?.map((payload) =>
         this.localEmitter.emitAsync(eventName, payload)
