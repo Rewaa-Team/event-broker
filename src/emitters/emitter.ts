@@ -1,5 +1,4 @@
 import { Message } from "@aws-sdk/client-sqs";
-import { EventEmitter } from "events";
 import {
   ConsumeOptions,
   EmitBatchPayload,
@@ -20,9 +19,10 @@ import {
 import { SqnsEmitter } from "./emitter.sqns";
 import { Logger as ILogger } from "../types";
 import { Logger } from "../utils/utils";
+import { EventEmitter2 } from "eventemitter2";
 
 export class Emitter implements IEmitter {
-  private localEmitter: EventEmitter = new EventEmitter();
+  private localEmitter: EventEmitter2 = new EventEmitter2();
   private emitter!: IEmitter;
   private options!: IEmitterOptions;
   private logger: ILogger;
@@ -30,9 +30,7 @@ export class Emitter implements IEmitter {
   constructor(options: IEmitterOptions) {
     this.options = options;
     this.logger = options.logger ?? new Logger(!!this.options.log);
-    if (this.options.useExternalBroker) {
-      this.emitter = new SqnsEmitter(this.logger, this.options);
-    }
+    this.emitter = new SqnsEmitter(this.logger, this.options);
   }
 
   async bootstrap(topics?: Topic[]) {
@@ -40,6 +38,55 @@ export class Emitter implements IEmitter {
       await this.emitter.bootstrap(topics);
     }
   }
+
+  private async localEmitAsync(
+    eventName: string,
+    options?: IEmitOptions,
+    payload?: any
+  ): Promise<void> {
+    try {
+      await this.localEmitter.emitAsync(eventName, payload);
+    } catch (error) {
+      this.logger.error({
+        msg: `Error emitting event ${eventName} with Emitter2`,
+        eventName,
+        options,
+        payload,
+        error,
+      });
+
+      if (this.options.mockEmitter?.throwErrors) {
+        throw error;
+      }
+    }
+  }
+
+  private async localEmitAsyncBatch(
+    eventName: string,
+    options?: IEmitOptions,
+    payloads?: any[]
+  ): Promise<void> {
+    try {
+      const emitPromises =
+        payloads?.map((payload) =>
+          this.localEmitter.emitAsync(eventName, payload)
+        ) || [];
+      await Promise.all(emitPromises);
+    } catch (error) {
+      this.logger.error({
+        msg: `Error emitting event ${eventName} with Emitter2`,
+        eventName,
+        options,
+        payloads,
+        error,
+      });
+
+      if (this.options.mockEmitter?.throwErrors) {
+        throw error;
+      }
+    }
+  }
+
   async emit(
     eventName: string,
     options?: IEmitOptions,
@@ -47,8 +94,11 @@ export class Emitter implements IEmitter {
   ): Promise<void> {
     if (this.options.useExternalBroker) {
       return await this.emitter.emit(eventName, options, payload);
+    } else if (this.options.mockEmitter) {
+      await this.localEmitAsync(eventName, options, payload);
     }
   }
+
   async emitBatch(
     eventName: string,
     messages: IBatchMessage[],
@@ -56,6 +106,8 @@ export class Emitter implements IEmitter {
   ): Promise<IFailedEmitBatchMessage[]> {
     if (this.options.useExternalBroker) {
       return await this.emitter.emitBatch(eventName, messages, options);
+    } else if (this.options.mockEmitter) {
+      await this.localEmitAsyncBatch(eventName, options, messages);
     }
     return [];
   }
