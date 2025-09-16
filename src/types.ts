@@ -493,6 +493,7 @@ export interface IEmitterOptions {
   consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
   /**
    * Optional mock emitter configuration
+   * set useExternalBroker to false and use this for local testing
    * When enabled, the emitter will not send messages to AWS
    * but will instead emit them locally using the local EventEmitter2 using "emitAsync"
    * This is useful for testing and local development

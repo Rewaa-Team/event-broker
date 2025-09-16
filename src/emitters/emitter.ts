@@ -20,6 +20,7 @@ import { SqnsEmitter } from "./emitter.sqns";
 import { Logger as ILogger } from "../types";
 import { Logger } from "../utils/utils";
 import { EventEmitter2 } from "eventemitter2";
+
 export class Emitter implements IEmitter {
   private localEmitter: EventEmitter2 = new EventEmitter2();
   private emitter!: IEmitter;
