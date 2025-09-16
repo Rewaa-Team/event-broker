@@ -491,6 +491,16 @@ export interface IEmitterOptions {
    * Optional global level idempotency options
    */
   consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
+  /**
+   * Optional mock emitter configuration
+   * When enabled, the emitter will not send messages to AWS
+   * but will instead emit them locally using the local EventEmitter2 using "emitAsync"
+   * This is useful for testing and local development
+   * Does not implement outbox
+   */
+  mockEmitter?: {
+    catchErrors: boolean;
+  };
 }
 
 export type DefaultQueueOptions = Omit<
