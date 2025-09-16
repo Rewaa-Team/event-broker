@@ -30,9 +30,7 @@ export class Emitter implements IEmitter {
   constructor(options: IEmitterOptions) {
     this.options = options;
     this.logger = options.logger ?? new Logger(!!this.options.log);
-    if (this.options.useExternalBroker) {
-      this.emitter = new SqnsEmitter(this.logger, this.options);
-    }
+    this.emitter = new SqnsEmitter(this.logger, this.options);
   }
 
   async bootstrap(topics?: Topic[]) {
@@ -41,7 +39,7 @@ export class Emitter implements IEmitter {
     }
   }
 
-    private async emitAsync(
+  private async localEmitAsync(
     eventName: string,
     options?: IEmitOptions,
     payload?: any
@@ -57,21 +55,22 @@ export class Emitter implements IEmitter {
         error,
       });
 
-      if (!this.options.mockEmitter?.catchErrors) {
+      if (this.options.mockEmitter?.throwErrors) {
         throw error;
       }
     }
   }
 
-   private async emitAsyncBatch(
+  private async localEmitAsyncBatch(
     eventName: string,
     options?: IEmitOptions,
-    payloads?: any[],
+    payloads?: any[]
   ): Promise<void> {
     try {
-      const emitPromises = payloads?.map((payload) =>
-        this.localEmitter.emitAsync(eventName, payload)
-      ) || [];
+      const emitPromises =
+        payloads?.map((payload) =>
+          this.localEmitter.emitAsync(eventName, payload)
+        ) || [];
       await Promise.all(emitPromises);
     } catch (error) {
       this.logger.error({
@@ -82,7 +81,7 @@ export class Emitter implements IEmitter {
         error,
       });
 
-      if (!this.options.mockEmitter?.catchErrors) {
+      if (this.options.mockEmitter?.throwErrors) {
         throw error;
       }
     }
@@ -96,7 +95,7 @@ export class Emitter implements IEmitter {
     if (this.options.useExternalBroker) {
       return await this.emitter.emit(eventName, options, payload);
     } else if (this.options.mockEmitter) {
-      await this.emitAsync(eventName, options, payload);
+      await this.localEmitAsync(eventName, options, payload);
     }
   }
 
@@ -108,7 +107,7 @@ export class Emitter implements IEmitter {
     if (this.options.useExternalBroker) {
       return await this.emitter.emitBatch(eventName, messages, options);
     } else if (this.options.mockEmitter) {
-      await this.emitAsyncBatch(eventName, options, messages);
+      await this.localEmitAsyncBatch(eventName, options, messages);
     }
     return [];
   }
