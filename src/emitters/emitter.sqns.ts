@@ -10,6 +10,9 @@ import {
   PAYLOAD_STRUCTURE_VERSION_V2,
   SOURCE_QUEUE_PREFIX,
   TAG_QUEUE_CHUNK_SIZE,
+  TAG_QUEUE_RETRY_ATTEMPTS,
+  TAG_QUEUE_INITIAL_BACKOFF_MS,
+  TAG_QUEUE_CHUNK_DELAY_MS,
   TOPIC_SUBSCRIBE_CHUNK_SIZE,
 } from "../constants";
 import { v4 } from "uuid";
@@ -48,7 +51,7 @@ import { SQSProducer } from "../producers/producer.sqs";
 import { LambdaClient } from "../utils/lambda.client";
 import { IOutbox, OutboxConfig, OutboxEventPayload } from "../outbox/types";
 import { Outbox } from "../outbox/outbox.sqns";
-import { delay } from "../utils/utils";
+import { delay, retryWithExponentialBackoff } from "../utils/utils";
 import { DynamoClient } from "../utils/dynamo.client";
 import { DynamoTable } from "../utils/types";
 import { DynamoTablesStructure } from "../utils/constants";
@@ -150,10 +153,16 @@ export class SqnsEmitter implements IEmitter {
       const queueChunk = queues.slice(i, i + TAG_QUEUE_CHUNK_SIZE);
       const promises = [];
       for (const queue of queueChunk) {
-        promises.push(this.sqsProducer.tagQueue(queue.url!, queue.tags!));
+        promises.push(
+          retryWithExponentialBackoff(
+            () => this.sqsProducer.tagQueue(queue.url!, queue.tags!),
+            TAG_QUEUE_RETRY_ATTEMPTS,
+            TAG_QUEUE_INITIAL_BACKOFF_MS
+          )
+        );
       }
       await Promise.all(promises);
-      await delay(1000);
+      await delay(TAG_QUEUE_CHUNK_DELAY_MS);
     }
     this.logger.info(`Queues tagged`);
   }
