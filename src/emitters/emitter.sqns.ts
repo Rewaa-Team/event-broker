@@ -132,7 +132,6 @@ export class SqnsEmitter implements IEmitter {
     }
     await this.createTopics();
     await this.createQueues();
-    await this.tagQueues();
     await this.subscribeToTopics();
     await this.createEventSourceMappings();
     if (this.options.useIdempotency !== false) {
@@ -140,22 +139,6 @@ export class SqnsEmitter implements IEmitter {
         DynamoTablesStructure[DynamoTable.Idempotency]
       );
     }
-  }
-
-  private async tagQueues() {
-    const queues = Array.from(this.queues, ([_, value]) => {
-      return value;
-    }).filter((queue) => queue.url && queue.tags);
-    for (let i = 0; i < queues.length; i += TAG_QUEUE_CHUNK_SIZE) {
-      const queueChunk = queues.slice(i, i + TAG_QUEUE_CHUNK_SIZE);
-      const promises = [];
-      for (const queue of queueChunk) {
-        promises.push(this.sqsProducer.tagQueue(queue.url!, queue.tags!));
-      }
-      await Promise.all(promises);
-      await delay(1000);
-    }
-    this.logger.info(`Queues tagged`);
   }
 
   private async createEventSourceMappings() {
