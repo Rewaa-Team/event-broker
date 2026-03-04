@@ -9,7 +9,6 @@ import {
   DLQ_PREFIX,
   PAYLOAD_STRUCTURE_VERSION_V2,
   SOURCE_QUEUE_PREFIX,
-  TAG_QUEUE_CHUNK_SIZE,
   TOPIC_SUBSCRIBE_CHUNK_SIZE,
 } from "../constants";
 import { v4 } from "uuid";
