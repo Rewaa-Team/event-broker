@@ -91,13 +91,11 @@ export class SqnsEmitter implements IEmitter {
     });
     this.snsProducer = new SNSProducer(this.logger, {
       requestHandler: keepAliveHandler,
-      ...this.options.awsConfig,
-      ...(this.options.snsConfig ?? {}),
+      ...(this.options.snsConfig || { ...this.options.awsConfig }),
     });
     this.sqsProducer = new SQSProducer(this.logger, {
       requestHandler: keepAliveHandler,
-      ...this.options.awsConfig,
-      ...(this.options.sqsConfig ?? {}),
+      ...(this.options.sqsConfig || { ...this.options.awsConfig }),
     });
     this.lambdaClient = new LambdaClient(
       this.logger,
