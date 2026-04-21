@@ -1,6 +1,6 @@
 {
   "name": "@rewaa/event-broker",
-  "version": "7.4.1",
+  "version": "8.0.0",
   "description": "A broker for all the events that Rewaa will ever produce or consume",
   "main": "dist/index.js",
   "scripts": {
@@ -22,7 +22,9 @@
   },
   "homepage": "https://github.com/Rewaa-Team/event-broker#readme",
   "dependencies": {
+    "dotenv": "^8.2.0",
     "eventemitter2": "^6.4.9",
+    "node-fetch": "^3.3.2",
     "sqs-consumer": "^6.1.0",
     "ulid": "^2.3.0",
     "uuid": "^9.0.0"
