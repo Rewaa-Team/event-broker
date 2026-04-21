@@ -648,7 +648,7 @@ export interface IEmitter {
    * @param receivedMessage The message received from the consumer
    * @returns The expected parsed data in the message as provided by the producer
    */
-  parseDataFromMessage<T>(receivedMessage: Message): IMessage<T>;
+  parseDataFromMessage<T>(receivedMessage: Message): Promise<IMessage<T>>;
 }
 
 export type ISNSMessage = IMessage<any>;

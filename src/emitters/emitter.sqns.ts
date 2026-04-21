@@ -52,7 +52,14 @@ import { DynamoClient } from "../utils/dynamo.client";
 import { DynamoTable } from "../utils/types";
 import { DynamoTablesStructure } from "../utils/constants";
 import { createHash } from "crypto";
-import { brotliCompressSync, brotliDecompressSync } from "zlib";
+import { brotliCompress, brotliDecompress } from "zlib";
+import { promisify } from "util";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { Agent as HttpsAgent } from "https";
+import { Agent as HttpAgent } from "http";
+
+const brotliCompressAsync = promisify(brotliCompress);
+const brotliDecompressAsync = promisify(brotliDecompress);
 
 export class SqnsEmitter implements IEmitter {
   private snsProducer!: SNSProducer;
@@ -78,14 +85,18 @@ export class SqnsEmitter implements IEmitter {
       );
     }
     this.localEmitter = options.localEmitter;
-    this.snsProducer = new SNSProducer(
-      this.logger,
-      this.options.snsConfig || { ...this.options.awsConfig }
-    );
-    this.sqsProducer = new SQSProducer(
-      this.logger,
-      this.options.sqsConfig || { ...this.options.awsConfig }
-    );
+    const keepAliveHandler = new NodeHttpHandler({
+      httpsAgent: new HttpsAgent({ keepAlive: true }),
+      httpAgent: new HttpAgent({ keepAlive: true }),
+    });
+    this.snsProducer = new SNSProducer(this.logger, {
+      requestHandler: keepAliveHandler,
+      ...(this.options.snsConfig || { ...this.options.awsConfig }),
+    });
+    this.sqsProducer = new SQSProducer(this.logger, {
+      requestHandler: keepAliveHandler,
+      ...(this.options.sqsConfig || { ...this.options.awsConfig }),
+    });
     this.lambdaClient = new LambdaClient(
       this.logger,
       this.options.lambdaConfig || { ...this.options.awsConfig }
@@ -382,9 +393,9 @@ export class SqnsEmitter implements IEmitter {
        * @todo Un-array this when switching to payload version 2
        */
       data: options?.compressed
-        ? brotliCompressSync(Buffer.from(JSON.stringify([payload]))).toString(
-            "base64"
-          )
+        ? (
+            await brotliCompressAsync(Buffer.from(JSON.stringify([payload])))
+          ).toString("base64")
         : [payload],
       compressed: options?.compressed,
     });
@@ -405,9 +416,9 @@ export class SqnsEmitter implements IEmitter {
          * @todo Un-array this when switching to payload version 2
          */
         data: options?.compressed
-          ? brotliCompressSync(Buffer.from(JSON.stringify([payload]))).toString(
-              "base64"
-            )
+          ? (
+              await brotliCompressAsync(Buffer.from(JSON.stringify([payload])))
+            ).toString("base64")
           : [payload],
         messageAttributes: options?.MessageAttributes,
         deduplicationId: options?.deduplicationId,
@@ -922,7 +933,7 @@ export class SqnsEmitter implements IEmitter {
   ) {
     let message: ISQSMessage;
     try {
-      message = this.parseDataFromMessage(receivedMessage);
+      message = await this.parseDataFromMessage(receivedMessage);
     } catch (error) {
       this.logger.error(
         `Failed to parse message. Trace Id: ${executionContext.executionTraceId}`
@@ -1131,7 +1142,7 @@ export class SqnsEmitter implements IEmitter {
     await this.outbox.updateEvents(outboxEvents);
   }
 
-  public parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
+  public async parseDataFromMessage<T>(receivedMessage: Message): Promise<IMessage<T>> {
     let snsMessage: ISNSReceiveMessage;
     let message: ISQSMessage;
     const body = receivedMessage.Body || (receivedMessage as any).body;
@@ -1147,7 +1158,7 @@ export class SqnsEmitter implements IEmitter {
 
     if (message.compressed) {
       message.data = JSON.parse(
-        brotliDecompressSync(Buffer.from(message.data, "base64")).toString()
+        (await brotliDecompressAsync(Buffer.from(message.data, "base64"))).toString()
       );
     }
     return message as IMessage<T>;

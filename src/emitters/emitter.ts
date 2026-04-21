@@ -183,7 +183,7 @@ export class Emitter implements IEmitter {
   ): EmitBatchPayload {
     return this.emitter.getBatchEmitPayload(eventName, messages, options);
   }
-  parseDataFromMessage<T>(receivedMessage: Message): IMessage<T> {
+  parseDataFromMessage<T>(receivedMessage: Message): Promise<IMessage<T>> {
     return this.emitter.parseDataFromMessage(receivedMessage);
   }
 }
