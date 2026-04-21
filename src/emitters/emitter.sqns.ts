@@ -55,7 +55,8 @@ import { createHash } from "crypto";
 import { brotliCompress, brotliDecompressSync } from "zlib";
 import { promisify } from "util";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { Agent } from "https";
+import { Agent as HttpsAgent } from "https";
+import { Agent as HttpAgent } from "http";
 
 const brotliCompressAsync = promisify(brotliCompress);
 
@@ -84,17 +85,18 @@ export class SqnsEmitter implements IEmitter {
     }
     this.localEmitter = options.localEmitter;
     const keepAliveHandler = new NodeHttpHandler({
-      httpsAgent: new Agent({ keepAlive: true }),
+      httpsAgent: new HttpsAgent({ keepAlive: true }),
+      httpAgent: new HttpAgent({ keepAlive: true }),
     });
     this.snsProducer = new SNSProducer(this.logger, {
       requestHandler: keepAliveHandler,
       ...this.options.awsConfig,
-      ...this.options.snsConfig,
+      ...(this.options.snsConfig ?? {}),
     });
     this.sqsProducer = new SQSProducer(this.logger, {
       requestHandler: keepAliveHandler,
       ...this.options.awsConfig,
-      ...this.options.sqsConfig,
+      ...(this.options.sqsConfig ?? {}),
     });
     this.lambdaClient = new LambdaClient(
       this.logger,
