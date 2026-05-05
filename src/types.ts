@@ -343,15 +343,34 @@ export interface Topic {
   consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
 }
 
+export interface BeforeEmitResult<T = any> {
+  data: T;
+  options?: IEmitOptions;
+}
+
 export interface Hooks {
   /**
+   * Called before every single emit.
+   * Receives the topic name, payload data, and the current emit options.
+   * Can return modified data and/or options (including MessageAttributes).
    *
-   * @param topicName name of the topic on which beforeEmit was
-   * executed
+   * @param topicName name of the topic on which beforeEmit was executed
    * @param data the data with which emit was called
-   * @returns the data with any changes to be done before it's emitted
+   * @param options the emit options including MessageAttributes
+   * @returns modified data and optionally modified options, or just the data for backward compatibility
    */
-  beforeEmit?<T>(topicName: string, data: T): Promise<T>;
+  beforeEmit?<T>(topicName: string, data: T, options?: IEmitOptions): Promise<BeforeEmitResult<T> | T>;
+  /**
+   * Called before a batch emit.
+   * Receives the topic name, the array of batch messages, and the batch emit options.
+   * Can modify each message's data and MessageAttributes.
+   *
+   * @param topicName name of the topic on which beforeBatchEmit was executed
+   * @param messages the batch messages to be emitted
+   * @param options the batch emit options
+   * @returns the modified batch messages
+   */
+  beforeBatchEmit?<T>(topicName: string, messages: IBatchMessage<T>[], options?: IBatchEmitOptions): Promise<IBatchMessage<T>[]>;
   /**
    *
    * @param topicName name of the topic on which afterEmit was
