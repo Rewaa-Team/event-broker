@@ -14,6 +14,7 @@ import {
   DeleteMessageBatchRequest,
   MessageAttributeValue,
   TagQueueCommandInput,
+  QueueAttributeName,
 } from "@aws-sdk/client-sqs";
 import {
   IMessage,
@@ -192,7 +193,7 @@ export class SQSProducer {
 
   getQueueAttributes = async (
     queueUrl: string,
-    attributes: string[]
+    attributes: QueueAttributeName[]
   ): Promise<Record<string, string> | undefined> => {
     const params: GetQueueAttributesRequest = {
       QueueUrl: queueUrl,
