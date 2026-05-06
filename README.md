@@ -28,7 +28,7 @@ This package abstracts the functionality of an event broker, keeping the underly
 ## Installation
 
 ```bash
-npm install @rewaa/event-broker
+npm install @rewaa-team/event-broker
 ```
 
 Peer dependencies:
