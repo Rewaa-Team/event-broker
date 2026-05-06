@@ -1,5 +1,5 @@
 {
-  "name": "@rewaa/event-broker",
+  "name": "@rewaa-team/event-broker",
   "version": "9.0.0",
   "description": "A broker for all the events that Rewaa will ever produce or consume",
   "main": "dist/index.js",
