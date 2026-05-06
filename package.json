@@ -22,6 +22,9 @@
     "url": "https://github.com/Rewaa-Team/event-broker/issues"
   },
   "homepage": "https://github.com/Rewaa-Team/event-broker#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "eventemitter2": "^6.4.9",
     "sqs-consumer": "^6.1.0",
