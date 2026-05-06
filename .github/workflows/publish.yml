@@ -11,11 +11,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v2
         with:
-          node-version: '14.x'
-          registry-url: 'https://registry.npmjs.org'
-      - name: npm 7
-        run: npm i -g npm@7 --registry=https://registry.npmjs.org
-      - name: Install Dependencies, Build and Publish package on NPM 📦
-        run: npm ci && npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          node-version: '22.x'
+          registry-url: 'https://npm.pkg.github.com'
+      - name: npm 10
+        run: npm i -g npm@10 --registry=https://registry.npmjs.org
+      - name: Install Dependencies, Build and Publish package on Github Registry 📦
+        run: npm ci && npm publish
