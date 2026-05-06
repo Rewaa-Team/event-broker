@@ -111,11 +111,17 @@ export interface IEmitOptions {
    * Should compress the message before sending
    */
   compressed?: boolean;
+  /**
+   * Set to true to skip the beforeEmit hook for this emit call.
+   *
+   * Default is false
+   */
+  skipBeforeEmitHook?: boolean;
 }
 
 export type IBatchEmitOptions = Pick<
   IEmitOptions,
-  "isFifo" | "exchangeType" | "consumerGroup" | "outboxData"
+  "isFifo" | "exchangeType" | "consumerGroup" | "outboxData" | "skipBeforeEmitHook"
 >;
 
 export type IBatchMessage<T = any> = Omit<
@@ -343,15 +349,33 @@ export interface Topic {
   consumerIdempotencyOptions?: ConsumerIdempotencyOptions;
 }
 
+export interface BeforeEmitResult<T = any> {
+  data: T;
+  options?: IEmitOptions;
+}
+
 export interface Hooks {
   /**
+   * Called before every single emit.
+   * Receives the topic name, payload data, and the current emit options.
+   * Can return modified data and/or options (including MessageAttributes).
    *
-   * @param topicName name of the topic on which beforeEmit was
-   * executed
+   * @param topicName name of the topic on which beforeEmit was executed
    * @param data the data with which emit was called
-   * @returns the data with any changes to be done before it's emitted
+   * @param options the emit options including MessageAttributes
+   * @returns modified data and optionally modified options, or just the data for backward compatibility
    */
-  beforeEmit?<T>(topicName: string, data: T): Promise<T>;
+  beforeEmit?<T>(topicName: string, data: T, options?: IEmitOptions): Promise<BeforeEmitResult<T> | T>;
+  /**
+   * Called before a batch emit.
+   * Receives the topic name and the array of batch messages.
+   * Can modify each message's data and MessageAttributes.
+   *
+   * @param topicName name of the topic on which beforeBatchEmit was executed
+   * @param messages the batch messages to be emitted
+   * @returns the modified batch messages
+   */
+  beforeBatchEmit?<T>(topicName: string, messages: IBatchMessage<T>[]): Promise<IBatchMessage<T>[]>;
   /**
    *
    * @param topicName name of the topic on which afterEmit was

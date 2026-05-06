@@ -480,20 +480,38 @@ export class SqnsEmitter implements IEmitter {
       if (options?.outboxData) {
         return await this.saveEventToOutbox(eventName, options, payload);
       }
+
+      let emitOptions = options;
+
+      // Call beforeEmit hook — can modify both payload and options (including MessageAttributes)
+      if (!options?.skipBeforeEmitHook) {
+        const hookResult = await this.options.hooks?.beforeEmit?.(eventName, payload, options);
+        if (hookResult) {
+          if (this.isBeforeEmitResult(hookResult)) {
+            modifiedArgs = hookResult.data;
+            emitOptions = hookResult.options ?? options;
+          } else {
+            modifiedArgs = hookResult;
+          }
+        } else {
+          modifiedArgs = payload;
+        }
+      } else {
+        modifiedArgs = payload;
+      }
+
       const topic: Topic = {
         name: eventName,
-        isFifo: !!options?.isFifo,
-        exchangeType: options?.exchangeType || ExchangeType.Fanout,
-        separateConsumerGroup: options?.consumerGroup,
+        isFifo: !!emitOptions?.isFifo,
+        exchangeType: emitOptions?.exchangeType || ExchangeType.Fanout,
+        separateConsumerGroup: emitOptions?.consumerGroup,
       };
-      modifiedArgs =
-        (await this.options.hooks?.beforeEmit?.(eventName, payload)) || payload;
 
       let response: SendMessageResult | PublishResponse;
       if (topic.exchangeType === ExchangeType.Queue) {
-        response = await this.emitToQueue(topic, options, modifiedArgs);
+        response = await this.emitToQueue(topic, emitOptions, modifiedArgs);
       } else {
-        response = await this.emitToTopic(topic, options, modifiedArgs);
+        response = await this.emitToTopic(topic, emitOptions, modifiedArgs);
       }
       await this.options.hooks?.afterEmit?.(eventName, modifiedArgs);
       return response;
@@ -625,6 +643,12 @@ export class SqnsEmitter implements IEmitter {
         await this.saveEventToOutbox(eventName, options, messages, true);
         return [];
       }
+
+      // Call beforeBatchEmit hook to allow dynamic attribute injection per message
+      const mergedMessages = !options?.skipBeforeEmitHook
+        ? (await this.options.hooks?.beforeBatchEmit?.(eventName, messages) ?? messages)
+        : messages;
+
       const topic: Topic = {
         name: eventName,
         isFifo: !!options?.isFifo,
@@ -632,9 +656,9 @@ export class SqnsEmitter implements IEmitter {
         separateConsumerGroup: options?.consumerGroup,
       };
       if (topic.exchangeType === ExchangeType.Queue) {
-        return await this.emitBatchToQueue(topic, messages);
+        return await this.emitBatchToQueue(topic, mergedMessages);
       }
-      return await this.emitBatchToTopic(topic, messages);
+      return await this.emitBatchToTopic(topic, mergedMessages);
     } catch (error) {
       this.logger.error(
         `Batch Message producing failed: ${eventName} ${JSON.stringify(error)}`
@@ -834,6 +858,10 @@ export class SqnsEmitter implements IEmitter {
 
   removeAllListener() {
     this.topicListeners.clear();
+  }
+
+  private isBeforeEmitResult(result: any): result is { data: any; options?: IEmitOptions } {
+    return result !== null && typeof result === 'object' && 'data' in result;
   }
 
   private getTopicFromEventNameAndConsumeOptions(
