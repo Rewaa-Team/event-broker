@@ -484,13 +484,17 @@ export class SqnsEmitter implements IEmitter {
       let emitOptions = options;
 
       // Call beforeEmit hook — can modify both payload and options (including MessageAttributes)
-      const hookResult = await this.options.hooks?.beforeEmit?.(eventName, payload, options);
-      if (hookResult) {
-        if (this.isBeforeEmitResult(hookResult)) {
-          modifiedArgs = hookResult.data;
-          emitOptions = hookResult.options ?? options;
+      if (!options?.skipBeforeEmitHook) {
+        const hookResult = await this.options.hooks?.beforeEmit?.(eventName, payload, options);
+        if (hookResult) {
+          if (this.isBeforeEmitResult(hookResult)) {
+            modifiedArgs = hookResult.data;
+            emitOptions = hookResult.options ?? options;
+          } else {
+            modifiedArgs = hookResult;
+          }
         } else {
-          modifiedArgs = hookResult;
+          modifiedArgs = payload;
         }
       } else {
         modifiedArgs = payload;
@@ -641,7 +645,9 @@ export class SqnsEmitter implements IEmitter {
       }
 
       // Call beforeBatchEmit hook to allow dynamic attribute injection per message
-      const mergedMessages = await this.options.hooks?.beforeBatchEmit?.(eventName, messages) ?? messages;
+      const mergedMessages = !options?.skipBeforeEmitHook
+        ? (await this.options.hooks?.beforeBatchEmit?.(eventName, messages) ?? messages)
+        : messages;
 
       const topic: Topic = {
         name: eventName,

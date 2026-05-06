@@ -111,11 +111,17 @@ export interface IEmitOptions {
    * Should compress the message before sending
    */
   compressed?: boolean;
+  /**
+   * Set to true to skip the beforeEmit hook for this emit call.
+   *
+   * Default is false
+   */
+  skipBeforeEmitHook?: boolean;
 }
 
 export type IBatchEmitOptions = Pick<
   IEmitOptions,
-  "isFifo" | "exchangeType" | "consumerGroup" | "outboxData"
+  "isFifo" | "exchangeType" | "consumerGroup" | "outboxData" | "skipBeforeEmitHook"
 >;
 
 export type IBatchMessage<T = any> = Omit<
