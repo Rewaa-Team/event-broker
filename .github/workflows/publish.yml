@@ -17,3 +17,5 @@ jobs:
         run: npm i -g npm@10 --registry=https://registry.npmjs.org
       - name: Install Dependencies, Build and Publish package on Github Registry 📦
         run: npm ci && npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
