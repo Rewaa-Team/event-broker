@@ -362,15 +362,14 @@ export interface Hooks {
   beforeEmit?<T>(topicName: string, data: T, options?: IEmitOptions): Promise<BeforeEmitResult<T> | T>;
   /**
    * Called before a batch emit.
-   * Receives the topic name, the array of batch messages, and the batch emit options.
+   * Receives the topic name and the array of batch messages.
    * Can modify each message's data and MessageAttributes.
    *
    * @param topicName name of the topic on which beforeBatchEmit was executed
    * @param messages the batch messages to be emitted
-   * @param options the batch emit options
    * @returns the modified batch messages
    */
-  beforeBatchEmit?<T>(topicName: string, messages: IBatchMessage<T>[], options?: IBatchEmitOptions): Promise<IBatchMessage<T>[]>;
+  beforeBatchEmit?<T>(topicName: string, messages: IBatchMessage<T>[]): Promise<IBatchMessage<T>[]>;
   /**
    *
    * @param topicName name of the topic on which afterEmit was

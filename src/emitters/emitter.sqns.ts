@@ -641,7 +641,7 @@ export class SqnsEmitter implements IEmitter {
       }
 
       // Call beforeBatchEmit hook to allow dynamic attribute injection per message
-      const mergedMessages = await this.options.hooks?.beforeBatchEmit?.(eventName, messages, options) ?? messages;
+      const mergedMessages = await this.options.hooks?.beforeBatchEmit?.(eventName, messages) ?? messages;
 
       const topic: Topic = {
         name: eventName,
