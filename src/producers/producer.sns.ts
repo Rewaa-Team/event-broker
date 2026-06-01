@@ -126,20 +126,24 @@ export class SNSProducer {
       Attributes: {}
     };
 
-    if (params.Attributes) {
-      if(filterPolicy) {
-        params.Attributes.FilterPolicy = JSON.stringify(filterPolicy);
-      }
-    }
-
     try {
       const response = await this.sns.subscribe(params);
       /**
-       * Always setting attributes after creating subscribtion
-       * This is done to avoid having to filter subscriptions to check
-       * if they exist
+       * Attributes are always set after creating the subscription rather than
+       * being passed to Subscribe. Subscribe is idempotent on the endpoint, so
+       * for an existing subscription it returns the same ARN without applying
+       * new attributes (and SNS/LocalStack reject re-subscribing with different
+       * attributes). Setting them here reconciles the FilterPolicy in place
+       * whether the subscription is newly created or already exists.
        */
       if(response.SubscriptionArn) {
+        if(filterPolicy) {
+        await this.sns.setSubscriptionAttributes({
+          SubscriptionArn: response.SubscriptionArn,
+          AttributeName: 'FilterPolicy',
+          AttributeValue: JSON.stringify(filterPolicy),
+        });
+      }
         if(deliverRawMessage) {
           await this.sns.setSubscriptionAttributes({
             SubscriptionArn: response.SubscriptionArn,
