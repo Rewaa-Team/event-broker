@@ -822,7 +822,7 @@ export class SqnsEmitter implements IEmitter {
       messageId: message.MessageId,
       receiptHandler: message.ReceiptHandle,
     };
-    this.logger.info(
+    this.logger.debug(
       `Message started ${queueUrl}_${
         executionContext.executionTraceId
       }_${new Date()}_${message?.Body?.toString()}`
@@ -834,7 +834,7 @@ export class SqnsEmitter implements IEmitter {
         deleteOptions.receiptHandle
       );
     }
-    this.logger.info(
+    this.logger.debug(
       `Message ended ${queueUrl}_${
         executionContext.executionTraceId
       }_${new Date()}`
