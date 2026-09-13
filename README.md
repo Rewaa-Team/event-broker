@@ -57,6 +57,41 @@ const emitter = new Emitter({
 });
 ```
 
+#### Logging
+
+Set `logLevel` to control how much the broker logs. Only messages at or above the configured level are logged:
+
+| `logLevel` | Logs |
+| --- | --- |
+| `LogLevel.Debug` | debug, info, warn, error |
+| `LogLevel.Info` | info, warn, error |
+| `LogLevel.Warn` | warn, error |
+| `LogLevel.Error` | error |
+| `LogLevel.Silent` | nothing |
+
+```ts
+import { Emitter, LogLevel } from "@rewaa/event-broker";
+
+const emitter = new Emitter({
+  // ...config
+  logLevel: LogLevel.Warn,
+});
+```
+
+`logLevel` also applies when you provide your own `logger`, so the broker can log at a different level than the rest of your service:
+
+```ts
+const emitter = new Emitter({
+  // ...config
+  logger: appLogger, // any object with error, warn, info and debug methods
+  logLevel: LogLevel.Error,
+});
+```
+
+`logLevel` takes precedence over `log`. When `logLevel` is not set, `log: true` logs every level and a custom `logger` receives every call. An unrecognized `logLevel` throws when the `Emitter` is created.
+
+Per-message consumer logs (`Message started` with the message body, and `Message ended`) are logged at debug, so they only show up with `LogLevel.Debug` or when your own logger allows debug.
+
 #### LocalStack / Offline Configuration
 
 ```ts

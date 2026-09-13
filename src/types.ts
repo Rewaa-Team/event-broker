@@ -23,6 +23,17 @@ export interface Logger {
   info(message: any): void;
 }
 
+export enum LogLevel {
+  Debug = "debug",
+  Info = "info",
+  Warn = "warn",
+  Error = "error",
+  /**
+   * Disables all logs
+   */
+  Silent = "silent",
+}
+
 export type MessageAttributes = { [key: string]: MessageAttributeValue };
 
 export interface IMessage<T> {
@@ -476,8 +487,18 @@ export interface IEmitterOptions {
   };
   /**
    * Set to true to enable logging
+   *
+   * Ignored when logLevel is provided
    */
   log?: boolean;
+  /**
+   * Minimum level at which the broker logs. Logs below this level are dropped.
+   * Applies to the custom logger as well when one is provided.
+   *
+   * Takes precedence over log. When not provided, log: true logs all levels
+   * and a custom logger receives all levels
+   */
+  logLevel?: LogLevel;
   /**
    * Set to true to enable local aws
    */

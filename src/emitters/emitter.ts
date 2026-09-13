@@ -12,6 +12,7 @@ import {
   IFailedConsumerMessages,
   IFailedEmitBatchMessage,
   IMessage,
+  LogLevel,
   ProcessMessageOptions,
   Queue,
   Topic,
@@ -29,7 +30,10 @@ export class Emitter implements IEmitter {
 
   constructor(options: IEmitterOptions) {
     this.options = options;
-    this.logger = options.logger ?? new Logger(!!this.options.log);
+    this.logger = options.logLevel
+      ? new Logger(options.logLevel, options.logger)
+      : options.logger ??
+        new Logger(this.options.log ? LogLevel.Debug : LogLevel.Info);
     this.emitter = new SqnsEmitter(this.logger, this.options);
   }
 
