@@ -1027,6 +1027,12 @@ export class SqnsEmitter implements IEmitter {
         );
       }
     } catch (error: any) {
+      await this.applyRetryVisibilityTimeout(
+        message.eventName,
+        queue,
+        queueUrl,
+        metadata
+      );
       this.logFailedEvent({
         failureType: FailedEventCategory.MessageProcessingFailed,
         topic: message.eventName,
@@ -1037,6 +1043,46 @@ export class SqnsEmitter implements IEmitter {
       // Doing this because i don't want to mess with stack trace of rethrowing error
       error["executionTraceId"] = executionContext.executionTraceId;
       throw error;
+    }
+  }
+
+  private async applyRetryVisibilityTimeout(
+    eventName: string,
+    queue: Queue | undefined,
+    queueUrl: string,
+    metadata: MessageMetaData
+  ): Promise<void> {
+    const topic = queue?.allTopics.find(({ name }) => name === eventName);
+    const visibilityTimeouts =
+      topic?.consumerGroup?.retryVisibilityTimeouts ??
+      topic?.retryVisibilityTimeouts;
+    const receiptHandle = metadata.executionContext.receiptHandler;
+    const receiveCount = metadata.approximateReceiveCount ?? 1;
+    const visibilityTimeout = visibilityTimeouts?.[receiveCount - 1];
+    if (visibilityTimeout === undefined || !receiptHandle) {
+      return;
+    }
+
+    try {
+      if (
+        !Number.isInteger(visibilityTimeout) ||
+        visibilityTimeout < 0 ||
+        visibilityTimeout > 43200
+      ) {
+        this.logger.error(
+          `Invalid retry visibility timeout for ${eventName}: ${visibilityTimeout}`
+        );
+        return;
+      }
+      await this.sqsProducer.changeMessageVisibility(
+        queueUrl,
+        receiptHandle,
+        visibilityTimeout
+      );
+    } catch (retryError) {
+      this.logger.error(
+        `Failed to update retry visibility timeout for ${eventName}: ${retryError}`
+      );
     }
   }
 

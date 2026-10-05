@@ -12,6 +12,7 @@ import {
   SendMessageBatchResult,
   SendMessageBatchRequest,
   DeleteMessageBatchRequest,
+  ChangeMessageVisibilityRequest,
   MessageAttributeValue,
   TagQueueCommandInput,
 } from "@aws-sdk/client-sqs";
@@ -237,6 +238,19 @@ export class SQSProducer {
       );
       throw error;
     }
+  };
+
+  changeMessageVisibility = async (
+    queueUrl: string,
+    receiptHandle: string,
+    visibilityTimeout: number
+  ): Promise<void> => {
+    const params: ChangeMessageVisibilityRequest = {
+      QueueUrl: queueUrl,
+      ReceiptHandle: receiptHandle,
+      VisibilityTimeout: visibilityTimeout,
+    };
+    await this.sqs.changeMessageVisibility(params);
   };
 
   deleteMessages = async (
