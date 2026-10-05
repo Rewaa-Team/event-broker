@@ -245,6 +245,14 @@ export interface Topic {
    */
   visibilityTimeout?: number;
   /**
+   * Overrides the visibility timeout after a consumer failure.
+   *
+   * Each entry corresponds to the current message receive count. A missing
+   * entry keeps the queue's configured visibility timeout.
+   * Unit: s. SQS accepts values between 0 and 43200.
+   */
+  retryVisibilityTimeouts?: readonly number[];
+  /**
    * Default: 10 for consumption
    */
   batchSize?: number;
