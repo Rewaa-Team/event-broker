@@ -679,9 +679,14 @@ export class SqnsEmitter implements IEmitter {
     });
     this.consumersRunning = true;
     this.logger.info(`Consumers started`);
-    process.on("SIGTERM", async () => {
+    process.once("SIGTERM", async () => {
       this.logger.info(`SIGTERM received, draining all consumers`);
       await this.drainConsumers();
+      // A SIGTERM listener disables Node's default exit, so re-raise once drained.
+      // Skipped when the host app has its own listener and owns termination.
+      if (process.listenerCount("SIGTERM") === 0) {
+        process.kill(process.pid, "SIGTERM");
+      }
     });
   }
 
